@@ -1,0 +1,36 @@
+{
+  "name": "NewsPost",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "image": {
+      "type": "string"
+    },
+    "eventDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "chapterId": {
+      "type": "string"
+    },
+    "chapterName": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "isGlobal": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "title",
+    "content"
+  ]
+}

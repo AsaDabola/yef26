@@ -1,0 +1,69 @@
+{
+  "name": "EvangelismSession",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "userName": {
+      "type": "string"
+    },
+    "chapterId": {
+      "type": "string"
+    },
+    "chapterName": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "startTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "durationMinutes": {
+      "type": "number"
+    },
+    "locationName": {
+      "type": "string"
+    },
+    "latitude": {
+      "type": "number"
+    },
+    "longitude": {
+      "type": "number"
+    },
+    "modeType": {
+      "type": "string",
+      "enum": [
+        "Individual",
+        "Group"
+      ],
+      "default": "Individual"
+    },
+    "studentIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "participantIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Other members who participated"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "userId",
+    "startTime"
+  ]
+}

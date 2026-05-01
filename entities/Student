@@ -1,0 +1,127 @@
+{
+  "name": "Student",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Student's full name"
+    },
+    "photo": {
+      "type": "string",
+      "description": "Photo URL"
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "Male",
+        "Female",
+        "Other",
+        "Prefer not to say"
+      ]
+    },
+    "country": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "universityId": {
+      "type": "string",
+      "description": "Linked university ID"
+    },
+    "universityName": {
+      "type": "string",
+      "description": "University name for display"
+    },
+    "collegeYear": {
+      "type": "string",
+      "enum": [
+        "Freshman",
+        "Sophomore",
+        "Junior",
+        "Senior",
+        "Graduate",
+        "Other"
+      ]
+    },
+    "major": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "socials": {
+      "type": "string",
+      "description": "Social media handles"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "evangelizedByUserId": {
+      "type": "string"
+    },
+    "evangelizedByUserName": {
+      "type": "string"
+    },
+    "evangelizedByChapterId": {
+      "type": "string"
+    },
+    "evangelizedByChapterName": {
+      "type": "string"
+    },
+    "statusPipeline": {
+      "type": "string",
+      "enum": [
+        "Evangelized",
+        "Contact Exchanged",
+        "Bible Study Started",
+        "Bible Study In Progress",
+        "Visiting Fellowship",
+        "Connected to Chapter",
+        "Discipled / Serving",
+        "Not Interested / Closed"
+      ],
+      "default": "Evangelized"
+    },
+    "bibleStudyTopics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "completedDate": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "lastStudyDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "nextStudyPlan": {
+      "type": "string"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Gallery of photos"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
