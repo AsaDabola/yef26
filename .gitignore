@@ -28,3 +28,7 @@ dist-ssr
 *.sw?
 
 .env
+
+# Source zip and extracted duplicate directory
+YEF_app_firebase_ready.zip
+YEF app/
