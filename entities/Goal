@@ -1,0 +1,74 @@
+{
+  "name": "Goal",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Goal title"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "hours",
+        "students",
+        "bible_studies",
+        "sessions"
+      ],
+      "description": "Type of goal"
+    },
+    "targetValue": {
+      "type": "number",
+      "description": "Target number to reach"
+    },
+    "currentValue": {
+      "type": "number",
+      "default": 0,
+      "description": "Current progress"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "personal",
+        "chapter"
+      ],
+      "default": "personal"
+    },
+    "userId": {
+      "type": "string",
+      "description": "User ID for personal goals"
+    },
+    "userName": {
+      "type": "string"
+    },
+    "chapterId": {
+      "type": "string",
+      "description": "Chapter ID for chapter goals"
+    },
+    "chapterName": {
+      "type": "string"
+    },
+    "startDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "endDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed",
+        "expired"
+      ],
+      "default": "active"
+    }
+  },
+  "required": [
+    "title",
+    "type",
+    "targetValue",
+    "scope"
+  ]
+}
