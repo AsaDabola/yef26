@@ -3,8 +3,8 @@ const { withNativeWind } = require("nativewind/metro");
 
 const config = getDefaultConfig(__dirname);
 
-// Allow Firebase ESM modules to resolve correctly on web
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'mjs', 'cjs'];
 config.resolver.unstable_enablePackageExports = true;
+config.resolver.unstable_conditionNames = ['require', 'default'];
 
 module.exports = withNativeWind(config, { input: "./global.css" });
