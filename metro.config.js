@@ -5,6 +5,6 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'mjs', 'cjs'];
 config.resolver.unstable_enablePackageExports = true;
-config.resolver.unstable_conditionNames = ['browser', 'require', 'default'];
+config.resolver.unstable_conditionNames = ['require', 'browser', 'default'];
 
 module.exports = withNativeWind(config, { input: "./global.css" });
