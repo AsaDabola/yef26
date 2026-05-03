@@ -5,7 +5,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, MessageCircle, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
-import { Entities } from '@/lib/firestore';
+import { Entities, getStudentById } from '@/lib/firestore';
 import { useAuth } from '@/lib/auth';
 import Badge, { pipelineColor } from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -32,12 +32,8 @@ export default function StudentProfileScreen() {
 
   const { data: student, isLoading } = useQuery({
     queryKey: ['student', id],
-    queryFn: async () => {
-      const result = await Entities.Student.filter({}, '-created_date', 1);
-      // Fetch by id directly
-      const allStudents = await Entities.Student.list('-created_date', 500);
-      return (allStudents as Record<string, unknown>[]).find((s) => s.id === id) ?? null;
-    },
+    queryFn: () => getStudentById(id!),
+    enabled: !!id,
   });
 
   const canEdit = user?.userRole === 'Admin' || user?.userRole === 'Evangelism Leader' ||

@@ -199,6 +199,12 @@ export const Entities = {
   },
 };
 
+export async function getStudentById(id: string): Promise<Record<string, unknown> | null> {
+  const snap = await getDoc(doc(db, 'students', id));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
 export async function uploadFile(file: { uri: string; name?: string; type?: string }) {
   const u = await waitForAuth();
   if (!u) throw new Error('Not authenticated');

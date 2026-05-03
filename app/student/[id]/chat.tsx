@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Send } from 'lucide-react-native';
 import { useAuth } from '@/lib/auth';
-import { Entities } from '@/lib/firestore';
+import { Entities, getStudentById } from '@/lib/firestore';
 import moment from 'moment';
 
 export default function StudentChatScreen() {
@@ -25,11 +25,9 @@ export default function StudentChatScreen() {
   });
 
   const { data: student } = useQuery({
-    queryKey: ['studentName', id],
-    queryFn: async () => {
-      const all = await Entities.Student.list('-created_date', 500);
-      return (all as Record<string, unknown>[]).find((s) => s.id === id);
-    },
+    queryKey: ['student', id],
+    queryFn: () => getStudentById(id!),
+    enabled: !!id,
   });
 
   const sendMsg = useMutation({
