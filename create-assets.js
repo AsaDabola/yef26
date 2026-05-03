@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-// Valid 1x1 white PNG (base64, CRC-correct)
+// Valid 1x1 white PNG — signature, IHDR, IDAT, IEND all with verified CRC32
 const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=',
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC',
   'base64'
 );
 
