@@ -1,60 +1,55 @@
 import { create } from 'zustand';
+import type { SessionMode } from './types';
 
-type SessionData = {
+type LiveSession = {
   startTime: string;
+  modeType: SessionMode;
+  locationName: string;
   studentIds: string[];
   notes: string;
-  modeType: 'Individual' | 'Group';
-  locationName: string;
 };
 
-type EvangelizingStore = {
+type Store = {
   isEvangelizing: boolean;
-  sessionData: SessionData | null;
-  startEvangelizing: (data?: Partial<SessionData>) => void;
-  stopEvangelizing: () => SessionData & { endTime: string; durationMinutes: number };
-  addStudentToSession: (studentId: string) => void;
+  session: LiveSession | null;
+  start: (opts?: { modeType?: SessionMode; locationName?: string }) => void;
+  stop: () => LiveSession & { endTime: string; durationMinutes: number };
+  addStudent: (id: string) => void;
 };
 
-export const useEvangelizing = create<EvangelizingStore>((set, get) => ({
+export const useSessionStore = create<Store>((set, get) => ({
   isEvangelizing: false,
-  sessionData: null,
+  session: null,
 
-  startEvangelizing(data = {}) {
+  start(opts = {}) {
     set({
       isEvangelizing: true,
-      sessionData: {
+      session: {
         startTime: new Date().toISOString(),
+        modeType: opts.modeType ?? 'Individual',
+        locationName: opts.locationName ?? '',
         studentIds: [],
         notes: '',
-        modeType: 'Individual',
-        locationName: '',
-        ...data,
       },
     });
   },
 
-  stopEvangelizing() {
-    const { sessionData } = get();
-    if (!sessionData) throw new Error('No active session');
+  stop() {
+    const { session } = get();
+    if (!session) throw new Error('No active session');
     const endTime = new Date().toISOString();
-    const durationMinutes = Math.round(
-      (new Date(endTime).getTime() - new Date(sessionData.startTime).getTime()) / 60000
+    const durationMinutes = Math.max(
+      1,
+      Math.round((Date.now() - new Date(session.startTime).getTime()) / 60000),
     );
-    set({ isEvangelizing: false, sessionData: null });
-    return { ...sessionData, endTime, durationMinutes };
+    set({ isEvangelizing: false, session: null });
+    return { ...session, endTime, durationMinutes };
   },
 
-  addStudentToSession(studentId: string) {
+  addStudent(id) {
     set((s) => {
-      if (!s.sessionData) return s;
-      if (s.sessionData.studentIds.includes(studentId)) return s;
-      return {
-        sessionData: {
-          ...s.sessionData,
-          studentIds: [...s.sessionData.studentIds, studentId],
-        },
-      };
+      if (!s.session || s.session.studentIds.includes(id)) return s;
+      return { session: { ...s.session, studentIds: [...s.session.studentIds, id] } };
     });
   },
 }));

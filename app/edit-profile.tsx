@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Image, Alert, KeyboardAvoidingView, Platform,
+  Alert, Image, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera } from 'lucide-react-native';
-import { Auth, uploadFile } from '../lib/firestore';
-import { useAuth } from '../lib/auth';
+import { AuthActions, useAuth } from '../lib/auth';
+import { uploadFile } from '../lib/upload';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 
@@ -21,7 +21,7 @@ export default function EditProfileScreen() {
   async function pickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photos.');
+      Alert.alert('Permission needed', 'Please allow access to photos.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -39,9 +39,14 @@ export default function EditProfileScreen() {
     mutationFn: async () => {
       let profilePhoto = user?.profilePhoto;
       if (photoUri) {
-        profilePhoto = await uploadFile({ uri: photoUri, name: 'profile.jpg', type: 'image/jpeg' });
+        profilePhoto = await uploadFile(photoUri, 'profile.jpg');
       }
-      await Auth.updateMe({ full_name: name.trim(), name: name.trim(), bio: bio.trim(), profilePhoto });
+      await AuthActions.updateProfile(user!.id, {
+        name: name.trim(),
+        full_name: name.trim(),
+        bio: bio.trim(),
+        profilePhoto,
+      });
     },
     onSuccess: async () => {
       await refreshUser();
@@ -58,22 +63,23 @@ export default function EditProfileScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
-        <View className="items-center pt-8 pb-4">
+        {/* Avatar picker */}
+        <View className="items-center pb-4 pt-8">
           <TouchableOpacity onPress={pickPhoto} className="relative">
             {photoSrc ? (
-              <Image source={{ uri: photoSrc }} className="w-24 h-24 rounded-full" />
+              <Image source={{ uri: photoSrc }} className="h-24 w-24 rounded-full" />
             ) : (
-              <View className="w-24 h-24 rounded-full bg-blue-100 items-center justify-center">
-                <Text className="text-blue-600 text-3xl font-bold">
+              <View className="h-24 w-24 items-center justify-center rounded-full bg-blue-100">
+                <Text className="text-3xl font-bold text-blue-600">
                   {(name || '?')[0].toUpperCase()}
                 </Text>
               </View>
             )}
-            <View className="absolute bottom-0 right-0 w-8 h-8 bg-blue-600 rounded-full items-center justify-center border-2 border-white">
+            <View className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
               <Camera size={14} color="#fff" />
             </View>
           </TouchableOpacity>
-          <Text className="text-xs text-slate-500 mt-2">Tap to change photo</Text>
+          <Text className="mt-2 text-xs text-slate-500">Tap to change photo</Text>
         </View>
 
         <View className="px-5 gap-4 pb-8">
@@ -86,7 +92,7 @@ export default function EditProfileScreen() {
           />
           <Input
             label="Bio (optional)"
-            placeholder="Tell us about yourself..."
+            placeholder="Tell us about yourself…"
             value={bio}
             onChangeText={setBio}
             multiline
@@ -94,10 +100,10 @@ export default function EditProfileScreen() {
             textAlignVertical="top"
             style={{ minHeight: 100 }}
           />
-          <Button onPress={() => mutation.mutate()} loading={mutation.isPending} className="mt-2">
+          <Button onPress={() => mutation.mutate()} loading={mutation.isPending} fullWidth className="mt-2">
             Save Changes
           </Button>
-          <Button variant="outline" onPress={() => router.back()}>
+          <Button variant="outline" onPress={() => router.back()} fullWidth>
             Cancel
           </Button>
         </View>

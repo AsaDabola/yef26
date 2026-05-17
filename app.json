@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -13,7 +14,7 @@
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.yef.evangelismtracker"
     },
     "android": {
@@ -29,7 +30,6 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font",
       [
         "expo-image-picker",
         {
@@ -37,6 +37,9 @@
         }
       ]
     ],
-    "scheme": "yef-evangelism"
+    "scheme": "yef-evangelism",
+    "experiments": {
+      "typedRoutes": false
+    }
   }
 }

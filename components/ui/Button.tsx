@@ -1,54 +1,68 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, View } from 'react-native';
-import { clsx } from 'clsx';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
 
 type Props = {
-  onPress?: () => void;
   children: React.ReactNode;
+  onPress?: () => void;
   variant?: Variant;
   disabled?: boolean;
   loading?: boolean;
+  fullWidth?: boolean;
   className?: string;
 };
 
-const base = 'flex-row items-center justify-center rounded-xl px-4 py-3 gap-2';
-
-const styles: Record<Variant, string> = {
-  primary: 'bg-blue-600 active:bg-blue-700',
-  secondary: 'bg-slate-100 active:bg-slate-200',
-  outline: 'border border-slate-300 bg-white active:bg-slate-50',
-  ghost: 'bg-transparent active:bg-slate-100',
+const container: Record<Variant, string> = {
+  primary:     'bg-blue-600 active:bg-blue-700',
+  secondary:   'bg-slate-100 active:bg-slate-200',
+  outline:     'border border-slate-300 bg-white active:bg-slate-50',
+  ghost:       'bg-transparent active:bg-slate-100',
   destructive: 'bg-red-600 active:bg-red-700',
 };
 
-const textStyles: Record<Variant, string> = {
-  primary: 'text-white font-semibold text-sm',
-  secondary: 'text-slate-700 font-semibold text-sm',
-  outline: 'text-slate-700 font-semibold text-sm',
-  ghost: 'text-slate-600 font-semibold text-sm',
+const textCls: Record<Variant, string> = {
+  primary:     'text-white font-semibold text-sm',
+  secondary:   'text-slate-700 font-semibold text-sm',
+  outline:     'text-slate-700 font-semibold text-sm',
+  ghost:       'text-slate-500 font-semibold text-sm',
   destructive: 'text-white font-semibold text-sm',
 };
 
-export function Button({ onPress, children, variant = 'primary', disabled, loading, className }: Props) {
+const spinnerColor: Record<Variant, string> = {
+  primary:     '#fff',
+  secondary:   '#475569',
+  outline:     '#475569',
+  ghost:       '#475569',
+  destructive: '#fff',
+};
+
+export function Button({
+  children,
+  onPress,
+  variant = 'primary',
+  disabled,
+  loading,
+  fullWidth,
+  className = '',
+}: Props) {
+  const isDisabled = disabled || loading;
   return (
     <TouchableOpacity
       onPress={onPress}
-      disabled={disabled || loading}
-      className={clsx(base, styles[variant], (disabled || loading) && 'opacity-50', className)}
-      activeOpacity={0.8}
+      disabled={isDisabled}
+      activeOpacity={0.75}
+      className={`flex-row items-center justify-center gap-2 rounded-xl px-4 py-3
+        ${container[variant]}
+        ${isDisabled ? 'opacity-50' : ''}
+        ${fullWidth ? 'w-full' : ''}
+        ${className}`}
     >
-      {loading && (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' || variant === 'destructive' ? '#fff' : '#475569'}
-        />
-      )}
+      {loading && <ActivityIndicator size="small" color={spinnerColor[variant]} />}
       {typeof children === 'string' ? (
-        <Text className={textStyles[variant]}>{children}</Text>
+        <Text className={textCls[variant]}>{children}</Text>
       ) : (
-        children
+        <View className="flex-row items-center gap-2">{children}</View>
       )}
     </TouchableOpacity>
   );

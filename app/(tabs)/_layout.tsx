@@ -1,10 +1,11 @@
+import React from 'react';
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Home, Newspaper, Plus, Users, User } from 'lucide-react-native';
-import { View } from 'react-native';
-import { useEvangelizing } from '../../lib/store';
+import { useSessionStore } from '../../lib/store';
 
 export default function TabsLayout() {
-  const isEvangelizing = useEvangelizing((s) => s.isEvangelizing);
+  const isLive = useSessionStore((s) => s.isEvangelizing);
 
   return (
     <Tabs
@@ -12,15 +13,8 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: '#2563eb',
         tabBarInactiveTintColor: '#94a3b8',
-        tabBarStyle: {
-          borderTopColor: '#e2e8f0',
-          paddingBottom: 4,
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-        },
+        tabBarStyle: { borderTopColor: '#e2e8f0', height: 60, paddingBottom: 8 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
@@ -41,10 +35,10 @@ export default function TabsLayout() {
         name="add"
         options={{
           title: '',
-          tabBarIcon: ({ focused }) => (
+          tabBarIcon: () => (
             <View
-              className={`w-14 h-14 rounded-full items-center justify-center -mt-4 shadow-lg ${
-                isEvangelizing ? 'bg-red-500' : 'bg-blue-600'
+              className={`-mt-5 h-14 w-14 items-center justify-center rounded-full shadow-lg ${
+                isLive ? 'bg-red-500' : 'bg-blue-600'
               }`}
             >
               <Plus size={28} color="#fff" />

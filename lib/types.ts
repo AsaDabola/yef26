@@ -1,3 +1,5 @@
+// ─── Auth / Users ────────────────────────────────────────────────────────────
+
 export type UserRole = 'Member' | 'Evangelism Leader' | 'Admin';
 
 export type UserProfile = {
@@ -19,17 +21,9 @@ export type UserProfile = {
   created_date?: string;
 };
 
-export type PipelineStage =
-  | 'Evangelized'
-  | 'Contact Exchanged'
-  | 'Bible Study Started'
-  | 'Bible Study In Progress'
-  | 'Visiting Fellowship'
-  | 'Connected to Chapter'
-  | 'Discipled/Serving'
-  | 'Not Interested/Closed';
+// ─── Students ─────────────────────────────────────────────────────────────────
 
-export const PIPELINE_STAGES: PipelineStage[] = [
+export const PIPELINE_STAGES = [
   'Evangelized',
   'Contact Exchanged',
   'Bible Study Started',
@@ -38,7 +32,9 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   'Connected to Chapter',
   'Discipled/Serving',
   'Not Interested/Closed',
-];
+] as const;
+
+export type PipelineStage = (typeof PIPELINE_STAGES)[number];
 
 export type BibleStudyTopic = { topic: string; completed: boolean };
 
@@ -62,6 +58,10 @@ export type Student = {
   created_date: string;
 };
 
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+
+export type SessionMode = 'Individual' | 'Group';
+
 export type EvangelismSession = {
   id: string;
   userId: string;
@@ -72,12 +72,14 @@ export type EvangelismSession = {
   startTime: string;
   endTime: string;
   durationMinutes: number;
-  modeType: 'Individual' | 'Group';
+  modeType: SessionMode;
   locationName: string;
   studentIds: string[];
   notes: string;
   created_date: string;
 };
+
+// ─── News ─────────────────────────────────────────────────────────────────────
 
 export type NewsPost = {
   id: string;
@@ -91,6 +93,8 @@ export type NewsPost = {
   authorName: string;
   created_date: string;
 };
+
+// ─── Goals ────────────────────────────────────────────────────────────────────
 
 export type GoalType =
   | 'sessions_week'
@@ -107,6 +111,8 @@ export type Goal = {
   created_date: string;
 };
 
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
 export type StudentChat = {
   id: string;
   studentId: string;
@@ -115,6 +121,8 @@ export type StudentChat = {
   senderName: string;
   created_date: string;
 };
+
+// ─── Chapters ─────────────────────────────────────────────────────────────────
 
 export type Chapter = {
   id: string;

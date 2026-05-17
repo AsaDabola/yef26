@@ -4,15 +4,18 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-config.resolver.sourceExts = [
-  ...config.resolver.sourceExts.filter((e) => e !== 'mjs'),
-  'cjs',
-];
+// Drop .mjs so Metro never picks up ESM builds that contain import.meta
+config.resolver.sourceExts = config.resolver.sourceExts.filter((e) => e !== 'mjs');
+
+// Force specific packages to their CJS builds
+const CJS_OVERRIDES = {
+  zustand: 'index.js',
+};
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName === 'zustand') {
-    const zustandDir = path.dirname(require.resolve('zustand/package.json'));
-    return { filePath: path.join(zustandDir, 'index.js'), type: 'sourceFile' };
+  if (Object.prototype.hasOwnProperty.call(CJS_OVERRIDES, moduleName)) {
+    const pkgDir = path.dirname(require.resolve(`${moduleName}/package.json`));
+    return { filePath: path.join(pkgDir, CJS_OVERRIDES[moduleName]), type: 'sourceFile' };
   }
   return context.resolveRequest(context, moduleName, platform);
 };

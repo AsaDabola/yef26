@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, ScrollView, Text, TextInput,
+  TouchableOpacity, View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send } from 'lucide-react-native';
 import moment from 'moment';
-import { Entities } from '../../../lib/firestore';
+import { ChatDB } from '../../../lib/db';
 import { useAuth } from '../../../lib/auth';
 import type { StudentChat } from '../../../lib/types';
 
@@ -14,37 +15,36 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [message, setMessage] = useState('');
+  const [text, setText] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
   const { data: chats = [] } = useQuery<StudentChat[]>({
-    queryKey: ['chats', id],
-    queryFn: () =>
-      Entities.StudentChat.filter({ studentId: id }, 'created_date', 200) as Promise<StudentChat[]>,
+    queryKey: ['chat', id],
+    queryFn: () => ChatDB.filter({ studentId: id }, 'created_date', 200) as Promise<StudentChat[]>,
     refetchInterval: 8000,
     enabled: !!id,
   });
 
   useEffect(() => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
   }, [chats.length]);
 
   const sendMutation = useMutation({
     mutationFn: () =>
-      Entities.StudentChat.create({
+      ChatDB.create({
         studentId: id,
-        message: message.trim(),
+        message: text.trim(),
         senderId: user?.id,
         senderName: user?.full_name ?? user?.name ?? '',
       }),
     onSuccess: () => {
-      setMessage('');
-      qc.invalidateQueries({ queryKey: ['chats', id] });
+      setText('');
+      qc.invalidateQueries({ queryKey: ['chat', id] });
     },
   });
 
-  function handleSend() {
-    if (!message.trim()) return;
+  function send() {
+    if (!text.trim() || sendMutation.isPending) return;
     sendMutation.mutate();
   }
 
@@ -61,28 +61,30 @@ export default function ChatScreen() {
       >
         {chats.length === 0 && (
           <View className="items-center py-12">
-            <Text className="text-slate-400 text-sm">No messages yet. Start the conversation!</Text>
+            <Text className="text-sm text-slate-400">No notes yet. Start the conversation!</Text>
           </View>
         )}
         <View className="gap-3 pb-4">
-          {chats.map((chat) => {
-            const isMe = chat.senderId === user?.id;
+          {chats.map((c) => {
+            const isMe = c.senderId === user?.id;
             return (
-              <View key={chat.id} className={`${isMe ? 'items-end' : 'items-start'}`}>
+              <View key={c.id} className={isMe ? 'items-end' : 'items-start'}>
                 {!isMe && (
-                  <Text className="text-xs text-slate-400 mb-1 ml-1">{chat.senderName}</Text>
+                  <Text className="mb-1 ml-1 text-xs text-slate-400">{c.senderName}</Text>
                 )}
                 <View
                   className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                    isMe ? 'bg-blue-600 rounded-br-sm' : 'bg-white border border-slate-200 rounded-bl-sm'
+                    isMe
+                      ? 'rounded-br-sm bg-blue-600'
+                      : 'rounded-bl-sm border border-slate-200 bg-white'
                   }`}
                 >
                   <Text className={`text-sm ${isMe ? 'text-white' : 'text-slate-800'}`}>
-                    {chat.message}
+                    {c.message}
                   </Text>
                 </View>
-                <Text className="text-xs text-slate-400 mt-1 mx-1">
-                  {moment(chat.created_date).fromNow()}
+                <Text className="mx-1 mt-1 text-xs text-slate-400">
+                  {moment(c.created_date).fromNow()}
                 </Text>
               </View>
             );
@@ -90,24 +92,24 @@ export default function ChatScreen() {
         </View>
       </ScrollView>
 
-      <View className="flex-row items-end gap-2 px-4 py-3 bg-white border-t border-slate-200">
+      {/* Input bar */}
+      <View className="flex-row items-end gap-2 border-t border-slate-200 bg-white px-4 py-3">
         <TextInput
-          className="flex-1 bg-slate-100 rounded-2xl px-4 py-3 text-sm text-slate-900 max-h-24"
-          placeholder="Write a note..."
+          className="max-h-24 flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-900"
+          placeholder="Write a note…"
           placeholderTextColor="#94a3b8"
-          value={message}
-          onChangeText={setMessage}
+          value={text}
+          onChangeText={setText}
           multiline
-          onSubmitEditing={handleSend}
         />
         <TouchableOpacity
-          onPress={handleSend}
-          disabled={!message.trim() || sendMutation.isPending}
-          className={`w-11 h-11 rounded-full items-center justify-center ${
-            message.trim() ? 'bg-blue-600' : 'bg-slate-200'
+          onPress={send}
+          disabled={!text.trim() || sendMutation.isPending}
+          className={`h-11 w-11 items-center justify-center rounded-full ${
+            text.trim() ? 'bg-blue-600' : 'bg-slate-200'
           }`}
         >
-          <Send size={18} color={message.trim() ? '#fff' : '#94a3b8'} />
+          <Send size={18} color={text.trim() ? '#fff' : '#94a3b8'} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

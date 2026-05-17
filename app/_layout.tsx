@@ -4,19 +4,17 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import { queryClient } from '../lib/queryClient';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { queryClient } from '../lib/queryClient';
 
-function RootNavigator() {
+function Guard() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
-
     const inAuth = segments[0] === '(auth)';
-
     if (!user) {
       if (!inAuth) router.replace('/(auth)/login');
     } else if (!user.onboardingComplete) {
@@ -31,7 +29,7 @@ function RootNavigator() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="student/[id]" options={{ headerShown: true, title: 'Student' }} />
-      <Stack.Screen name="student/[id]/chat" options={{ headerShown: true, title: 'Chat' }} />
+      <Stack.Screen name="student/[id]/chat" options={{ headerShown: true, title: 'Notes & Chat' }} />
       <Stack.Screen name="edit-profile" options={{ headerShown: true, title: 'Edit Profile' }} />
       <Stack.Screen name="analytics" options={{ headerShown: true, title: 'Analytics' }} />
       <Stack.Screen name="goals" options={{ headerShown: true, title: 'Goals' }} />
@@ -48,7 +46,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <StatusBar style="dark" />
-          <RootNavigator />
+          <Guard />
         </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
