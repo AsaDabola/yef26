@@ -7,7 +7,6 @@ import { Platform } from 'react-native';
 import {
   getAuth,
   initializeAuth,
-  getReactNativePersistence,
   browserLocalPersistence,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -16,7 +15,6 @@ import {
   updateProfile,
   type User,
 } from 'firebase/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { app } from './firebase';
 import { UserDB } from './db';
 import type { UserProfile } from './types';
@@ -28,12 +26,15 @@ let _auth: ReturnType<typeof getAuth> | null = null;
 function getFirebaseAuth() {
   if (_auth) return _auth;
   try {
-    _auth =
-      Platform.OS === 'web'
-        ? initializeAuth(app, { persistence: browserLocalPersistence })
-        : initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+    if (Platform.OS === 'web') {
+      _auth = initializeAuth(app, { persistence: browserLocalPersistence });
+    } else {
+      // Dynamic require keeps AsyncStorage out of the web bundle
+      const { getReactNativePersistence } = require('firebase/auth');
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      _auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+    }
   } catch {
-    // initializeAuth throws if called twice; fall back to getAuth
     _auth = getAuth(app);
   }
   return _auth;
