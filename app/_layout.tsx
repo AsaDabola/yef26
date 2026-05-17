@@ -1,14 +1,13 @@
 import '../global.css';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, ActivityIndicator } from 'react-native';
-import { AuthProvider, useAuth } from '@/lib/auth';
-import { queryClient } from '@/lib/queryClient';
+import { StatusBar } from 'expo-status-bar';
+import { AuthProvider, useAuth } from '../lib/auth';
+import { queryClient } from '../lib/queryClient';
 
-function RootNav() {
+function Guard() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
@@ -16,40 +15,40 @@ function RootNav() {
   useEffect(() => {
     if (loading) return;
     const inAuth = segments[0] === '(auth)';
-    if (!user && !inAuth) {
-      router.replace('/(auth)/login');
-    } else if (user && inAuth) {
-      if (!user.onboardingComplete) {
-        router.replace('/(auth)/onboarding');
-      } else {
-        router.replace('/(tabs)');
-      }
-    } else if (user && !inAuth && !user.onboardingComplete) {
+    if (!user) {
+      if (!inAuth) router.replace('/(auth)/login');
+    } else if (!user.onboardingComplete) {
       router.replace('/(auth)/onboarding');
+    } else if (inAuth) {
+      router.replace('/(tabs)');
     }
   }, [user, loading]);
 
-  if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
-    );
-  }
-
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="student/[id]" options={{ headerShown: true, title: 'Student' }} />
+      <Stack.Screen name="student/[id]/chat" options={{ headerShown: true, title: 'Notes & Chat' }} />
+      <Stack.Screen name="edit-profile" options={{ headerShown: true, title: 'Edit Profile' }} />
+      <Stack.Screen name="analytics" options={{ headerShown: true, title: 'Analytics' }} />
+      <Stack.Screen name="goals" options={{ headerShown: true, title: 'Goals' }} />
+      <Stack.Screen name="session-logs" options={{ headerShown: true, title: 'Session Logs' }} />
+      <Stack.Screen name="members" options={{ headerShown: true, title: 'Members' }} />
+      <Stack.Screen name="manage-roles" options={{ headerShown: true, title: 'Manage Roles' }} />
+    </Stack>
+  );
 }
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-            <RootNav />
-          </QueryClientProvider>
+          <StatusBar style="dark" />
+          <Guard />
         </AuthProvider>
-      </SafeAreaProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }

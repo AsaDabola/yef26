@@ -1,140 +1,114 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
-  RefreshControl, ActivityIndicator,
+  RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Search, Filter, UserPlus, ChevronRight } from 'lucide-react-native';
-import { useAuth } from '@/lib/auth';
-import { Entities } from '@/lib/firestore';
-import Badge, { pipelineColor } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
-
-const PIPELINE_STAGES = [
-  'All', 'Evangelized', 'Contact Exchanged', 'Bible Study Started',
-  'Bible Study In Progress', 'Visiting Fellowship', 'Connected to Chapter',
-  'Discipled / Serving', 'Not Interested / Closed',
-];
+import { useQuery } from '@tanstack/react-query';
+import { ChevronRight, Search } from 'lucide-react-native';
+import moment from 'moment';
+import { StudentDB } from '../../lib/db';
+import { Card, CardContent } from '../../components/ui/Card';
+import { Badge, pipelineBadgeColor } from '../../components/ui/Badge';
+import { PIPELINE_STAGES } from '../../lib/types';
+import type { Student } from '../../lib/types';
 
 export default function StudentsScreen() {
-  const { user } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const [stageFilter, setStageFilter] = useState('All');
-  const [refreshing, setRefreshing] = useState(false);
+  const [stage, setStage] = useState('');
 
-  const { data: students = [], isLoading, refetch } = useQuery({
-    queryKey: ['allStudents', user?.chapterId],
-    queryFn: () =>
-      user?.chapterId
-        ? Entities.Student.filter({ evangelizedByChapterId: user.chapterId }, '-created_date', 200)
-        : Entities.Student.list('-created_date', 200),
-    enabled: !!user,
+  const { data: students = [], isFetching, refetch } = useQuery<Student[]>({
+    queryKey: ['students'],
+    queryFn: () => StudentDB.list('-created_date', 500) as Promise<Student[]>,
   });
 
-  const filtered = (students as Record<string, unknown>[]).filter((s) => {
-    const matchSearch = !search ||
-      (s.name as string)?.toLowerCase().includes(search.toLowerCase()) ||
-      (s.universityName as string)?.toLowerCase().includes(search.toLowerCase());
-    const matchStage = stageFilter === 'All' || s.statusPipeline === stageFilter;
+  const filtered = students.filter((s) => {
+    const q = search.toLowerCase();
+    const matchSearch =
+      !search ||
+      s.name.toLowerCase().includes(q) ||
+      s.universityName?.toLowerCase().includes(q);
+    const matchStage = !stage || s.statusPipeline === stage;
     return matchSearch && matchStage;
   });
 
   return (
     <View className="flex-1 bg-slate-50">
-      {/* Header */}
-      <View className="px-4 pt-12 pb-4 bg-white border-b border-slate-100">
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-2xl font-bold text-slate-800">Students</Text>
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/add')}
-            className="w-9 h-9 bg-blue-600 rounded-full items-center justify-center"
-          >
-            <UserPlus size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        {/* Search */}
-        <View className="flex-row items-center bg-slate-100 rounded-xl px-3 py-2 gap-2 mb-3">
+      <View className="border-b border-slate-200 bg-white px-5 pb-4 pt-14">
+        <Text className="text-xl font-bold text-slate-800">Students</Text>
+        <Text className="mt-0.5 text-sm text-slate-500">{students.length} contacts</Text>
+      </View>
+
+      {/* Search */}
+      <View className="px-4 pt-4 pb-2">
+        <View className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
           <Search size={16} color="#94a3b8" />
           <TextInput
+            className="flex-1 py-3 text-sm text-slate-800"
+            placeholder="Search by name or university…"
+            placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={setSearch}
-            placeholder="Search students..."
-            placeholderTextColor="#94a3b8"
-            className="flex-1 text-sm text-slate-800"
           />
         </View>
-        {/* Pipeline Filter */}
-        <FlatList
-          data={PIPELINE_STAGES}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => setStageFilter(item)}
-              className={`mr-2 px-3 py-1.5 rounded-full border ${
-                stageFilter === item ? 'bg-blue-600 border-blue-600' : 'border-slate-200 bg-white'
-              }`}
-            >
-              <Text className={`text-xs font-medium ${stageFilter === item ? 'text-white' : 'text-slate-600'}`}>
-                {item === 'All' ? item : item.split(' ')[0]}
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
       </View>
 
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#2563eb" />
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id as string}
-          contentContainerStyle={{ padding: 16, gap: 10 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await refetch(); setRefreshing(false); }} />}
-          ListEmptyComponent={
-            <View className="items-center py-16">
-              <UserPlus size={40} color="#cbd5e1" />
-              <Text className="text-slate-400 mt-3">No students found</Text>
-            </View>
-          }
-          renderItem={({ item: student }) => (
-            <TouchableOpacity onPress={() => router.push(`/student/${student.id}`)}>
-              <Card className="p-4">
-                <View className="flex-row items-center gap-3">
-                  <View className="w-11 h-11 rounded-full bg-blue-50 items-center justify-center">
-                    <Text className="text-blue-700 font-semibold text-sm">
-                      {(student.name as string)?.charAt(0)?.toUpperCase() ?? '?'}
+      {/* Stage filter chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 8 }}
+      >
+        <TouchableOpacity
+          onPress={() => setStage('')}
+          className={`rounded-full px-3 py-1.5 ${!stage ? 'bg-blue-600' : 'border border-slate-200 bg-white'}`}
+        >
+          <Text className={`text-xs font-semibold ${!stage ? 'text-white' : 'text-slate-600'}`}>All</Text>
+        </TouchableOpacity>
+        {PIPELINE_STAGES.map((s) => (
+          <TouchableOpacity
+            key={s}
+            onPress={() => setStage(stage === s ? '' : s)}
+            className={`rounded-full px-3 py-1.5 ${stage === s ? 'bg-blue-600' : 'border border-slate-200 bg-white'}`}
+          >
+            <Text className={`text-xs font-semibold ${stage === s ? 'text-white' : 'text-slate-600'}`}>
+              {s}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <ScrollView
+        className="flex-1 px-4"
+        refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} />}
+      >
+        {filtered.length === 0 && (
+          <View className="items-center py-16">
+            <Text className="text-sm text-slate-400">No students found</Text>
+          </View>
+        )}
+        <View className="gap-2 pb-6">
+          {filtered.map((s) => (
+            <TouchableOpacity key={s.id} onPress={() => router.push(`/student/${s.id}` as any)}>
+              <Card>
+                <CardContent className="flex-row items-center pt-3">
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold text-slate-800">{s.name}</Text>
+                    <Text className="text-xs text-slate-500">{s.universityName}</Text>
+                    <View className="mt-1.5">
+                      <Badge color={pipelineBadgeColor(s.statusPipeline)}>{s.statusPipeline}</Badge>
+                    </View>
+                    <Text className="mt-1 text-xs text-slate-400">
+                      {moment(s.created_date).fromNow()} · {s.evangelizedByUserName}
                     </Text>
                   </View>
-                  <View className="flex-1 min-w-0">
-                    <Text className="font-semibold text-slate-800" numberOfLines={1}>{student.name as string}</Text>
-                    <Text className="text-xs text-slate-500" numberOfLines={1}>{student.universityName as string}</Text>
-                    <Text className="text-xs text-slate-400">
-                      {student.phone as string}{student.phone && student.email ? ' · ' : ''}{student.email as string}
-                    </Text>
-                  </View>
-                  <View className="items-end gap-1">
-                    <Badge variant={pipelineColor(student.statusPipeline as string)}>
-                      {(student.statusPipeline as string)?.split(' ')[0] ?? '—'}
-                    </Badge>
-                    <ChevronRight size={14} color="#94a3b8" />
-                  </View>
-                </View>
+                  <ChevronRight size={16} color="#cbd5e1" />
+                </CardContent>
               </Card>
             </TouchableOpacity>
-          )}
-        />
-      )}
-
-      {/* Count */}
-      <View className="px-4 py-2 bg-white border-t border-slate-100">
-        <Text className="text-xs text-slate-400 text-center">{filtered.length} student{filtered.length !== 1 ? 's' : ''}</Text>
-      </View>
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }

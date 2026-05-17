@@ -1,129 +1,125 @@
 import React from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, RefreshControl, Alert,
-} from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import {
-  LogOut, Edit2, BarChart3, Target, Clock, Users as UsersIcon,
-  BookOpen, Shield, ChevronRight, UserPlus,
+  BarChart2, BookOpen, BookText, ChevronRight, Clock, LogOut,
+  Shield, Target, TrendingUp, Users,
 } from 'lucide-react-native';
-import { useAuth } from '@/lib/auth';
-import { Entities } from '@/lib/firestore';
-import { Card } from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import moment from 'moment';
+import { useAuth } from '../../lib/auth';
+import { SessionDB, StudentDB } from '../../lib/db';
+import { Card, CardContent } from '../../components/ui/Card';
+import type { EvangelismSession, Student } from '../../lib/types';
 
 export default function ProfileScreen() {
-  const { user, logout, refreshUser } = useAuth();
   const router = useRouter();
+  const { user, logout } = useAuth();
 
-  const { data: mySessions = [], isLoading, refetch } = useQuery({
-    queryKey: ['mySessions', user?.id],
-    queryFn: () => Entities.EvangelismSession.filter({ userId: user?.id }, '-created_date', 200),
-    enabled: !!user,
+  const { data: sessions = [] } = useQuery<EvangelismSession[]>({
+    queryKey: ['sessions'],
+    queryFn: () => SessionDB.list('-created_date', 500) as Promise<EvangelismSession[]>,
+  });
+  const { data: students = [] } = useQuery<Student[]>({
+    queryKey: ['students'],
+    queryFn: () => StudentDB.list('-created_date', 500) as Promise<Student[]>,
   });
 
-  const { data: myStudents = [] } = useQuery({
-    queryKey: ['myStudents', user?.id],
-    queryFn: () => Entities.Student.filter({ evangelizedByUserId: user?.id }, '-created_date', 200),
-    enabled: !!user,
-  });
+  const mySessions = sessions.filter((s) => s.userId === user?.id);
+  const myStudents = students.filter((s) => s.evangelizedByUserId === user?.id);
+  const hours = Math.round(
+    mySessions.reduce((a, s) => a + (s.durationMinutes || 0), 0) / 60 * 10,
+  ) / 10;
+  const bibleStudies = myStudents.filter((s) => s.bibleStudyTopics?.some((t) => t.completed)).length;
 
-  const totalHours = Math.round(
-    (mySessions as Record<string, unknown>[]).reduce((s, x) => s + ((x.durationMinutes as number) || 0), 0) / 60
-  );
-  const bibleStudies = (myStudents as Record<string, unknown>[]).filter((s) =>
-    ['Bible Study Started', 'Bible Study In Progress'].includes(s.statusPipeline as string)
-  ).length;
+  const stats = [
+    { label: 'Hours',    value: hours,               icon: Clock },
+    { label: 'Sessions', value: mySessions.length,   icon: TrendingUp },
+    { label: 'Students', value: myStudents.length,   icon: Users },
+    { label: 'Bible',    value: bibleStudies,        icon: BookOpen },
+  ];
 
-  const handleLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+  type MenuItem = { icon: typeof BarChart2; label: string; route: string; color: string };
+  const menu: MenuItem[] = [
+    { icon: BarChart2,  label: 'Analytics',     route: '/analytics',    color: '#4f46e5' },
+    { icon: Target,     label: 'Goals',         route: '/goals',        color: '#16a34a' },
+    { icon: BookText,   label: 'Session Logs',  route: '/session-logs', color: '#0891b2' },
+    { icon: Users,      label: 'Members',       route: '/members',      color: '#7c3aed' },
+    ...(user?.userRole === 'Admin'
+      ? [{ icon: Shield, label: 'Manage Roles', route: '/manage-roles', color: '#dc2626' }]
+      : []),
+  ];
+
+  function confirmLogout() {
+    Alert.alert('Sign Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: logout },
     ]);
-  };
+  }
 
-  const menuItems = [
-    { icon: BarChart3, label: 'Analytics', route: '/analytics' },
-    { icon: Target, label: 'Goals', route: '/goals' },
-    { icon: Clock, label: 'Session Logs', route: '/session-logs' },
-    { icon: UsersIcon, label: 'Members', route: '/members' },
-    ...(user?.userRole === 'Admin' ? [{ icon: Shield, label: 'Manage Roles', route: '/manage-roles' }] : []),
-  ];
+  const initials = (user?.full_name ?? user?.name ?? '?')[0].toUpperCase();
 
   return (
-    <ScrollView
-      className="flex-1 bg-slate-50"
-      refreshControl={<RefreshControl refreshing={isLoading} onRefresh={async () => { await refetch(); await refreshUser(); }} />}
-    >
-      <View className="px-4 pt-12 pb-8">
-        {/* Header */}
-        <View className="flex-row items-center justify-between mb-6">
-          <Text className="text-2xl font-bold text-slate-800">Profile</Text>
-          <View className="flex-row gap-2">
-            <TouchableOpacity onPress={() => router.push('/edit-profile')}
-              className="w-9 h-9 border border-slate-200 rounded-full items-center justify-center bg-white">
-              <Edit2 size={16} color="#64748b" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleLogout}
-              className="w-9 h-9 border border-slate-200 rounded-full items-center justify-center bg-white">
-              <LogOut size={16} color="#64748b" />
-            </TouchableOpacity>
+    <ScrollView className="flex-1 bg-slate-50">
+      {/* Hero */}
+      <View className="items-center bg-blue-600 pb-8 pt-14 px-5">
+        {user?.profilePhoto ? (
+          <Image source={{ uri: user.profilePhoto }} className="h-20 w-20 rounded-full border-2 border-white mb-3" />
+        ) : (
+          <View className="h-20 w-20 items-center justify-center rounded-full border-2 border-white bg-blue-500 mb-3">
+            <Text className="text-2xl font-bold text-white">{initials}</Text>
           </View>
-        </View>
+        )}
+        <Text className="text-xl font-bold text-white">{user?.full_name ?? user?.name}</Text>
+        <Text className="mt-0.5 text-sm text-blue-200">{user?.userRole} · {user?.chapterName}</Text>
+        {user?.bio ? (
+          <Text className="mt-2 max-w-xs text-center text-xs text-blue-100">{user.bio}</Text>
+        ) : null}
+        <TouchableOpacity
+          onPress={() => router.push('/edit-profile')}
+          className="mt-3 rounded-full bg-blue-500 px-4 py-1.5"
+        >
+          <Text className="text-xs font-semibold text-white">Edit Profile</Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* Profile Card */}
-        <Card className="mb-5 p-5 items-center">
-          <View className="w-20 h-20 rounded-2xl bg-blue-600 items-center justify-center mb-3 shadow-md">
-            <Text className="text-white text-3xl font-bold">
-              {user?.full_name?.charAt(0)?.toUpperCase() ?? '?'}
-            </Text>
-          </View>
-          <Text className="text-xl font-bold text-slate-800">{user?.full_name}</Text>
-          <Text className="text-sm text-slate-500 mt-0.5">{user?.email}</Text>
-          <View className="flex-row gap-2 mt-2">
-            <Badge variant="blue">{user?.userRole ?? 'Member'}</Badge>
-            {user?.chapterName && <Badge variant="indigo">{user.chapterName}</Badge>}
-          </View>
-          {user?.bio && <Text className="text-sm text-slate-600 mt-3 text-center">{user.bio}</Text>}
-          <View className="flex-row gap-4 mt-4">
-            <Text className="text-xs text-slate-400">{user?.country}</Text>
-            {user?.city && <Text className="text-xs text-slate-400">· {user.city}</Text>}
-          </View>
+      <View className="px-4 pt-4">
+        {/* Stats */}
+        <Card className="mb-4">
+          <CardContent className="flex-row justify-around pt-4">
+            {stats.map(({ label, value }) => (
+              <View key={label} className="items-center">
+                <Text className="text-2xl font-bold text-slate-800">{value}</Text>
+                <Text className="text-xs text-slate-500">{label}</Text>
+              </View>
+            ))}
+          </CardContent>
         </Card>
 
-        {/* Stats */}
-        <Text className="font-semibold text-slate-700 mb-3">My Stats</Text>
-        <View className="flex-row gap-3 mb-5">
-          {[
-            { label: 'Hours', value: totalHours, color: 'bg-blue-50' },
-            { label: 'Sessions', value: mySessions.length, color: 'bg-indigo-50' },
-            { label: 'Students', value: myStudents.length, color: 'bg-green-50' },
-            { label: 'Bible Studies', value: bibleStudies, color: 'bg-purple-50' },
-          ].map((stat) => (
-            <View key={stat.label} className={`flex-1 ${stat.color} rounded-2xl p-3 items-center`}>
-              <Text className="text-xl font-bold text-slate-800">{stat.value}</Text>
-              <Text className="text-xs text-slate-500 mt-0.5 text-center">{stat.label}</Text>
-            </View>
-          ))}
-        </View>
-
         {/* Menu */}
-        <Text className="font-semibold text-slate-700 mb-3">More</Text>
-        <Card>
-          {menuItems.map((item, i) => (
+        <Card className="mb-4">
+          {menu.map((item, i) => (
             <TouchableOpacity
               key={item.label}
-              onPress={() => router.push(item.route as never)}
-              className={`flex-row items-center px-4 py-3.5 gap-3 ${i < menuItems.length - 1 ? 'border-b border-slate-50' : ''}`}
+              onPress={() => router.push(item.route as any)}
+              activeOpacity={0.7}
+              className={`flex-row items-center gap-3 px-4 py-4 ${i < menu.length - 1 ? 'border-b border-slate-100' : ''}`}
             >
-              <item.icon size={18} color="#64748b" />
-              <Text className="flex-1 text-sm text-slate-700">{item.label}</Text>
+              <View
+                className="h-9 w-9 items-center justify-center rounded-xl"
+                style={{ backgroundColor: `${item.color}18` }}
+              >
+                <item.icon size={18} color={item.color} />
+              </View>
+              <Text className="flex-1 text-sm font-medium text-slate-700">{item.label}</Text>
               <ChevronRight size={16} color="#cbd5e1" />
             </TouchableOpacity>
           ))}
         </Card>
+
+        <TouchableOpacity onPress={confirmLogout} className="flex-row items-center gap-3 p-4 mb-8">
+          <LogOut size={18} color="#ef4444" />
+          <Text className="text-sm font-semibold text-red-500">Sign Out</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

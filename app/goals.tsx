@@ -1,183 +1,145 @@
 import React, { useState } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, Modal,
-  KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
-} from 'react-native';
+import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, X, Trash2 } from 'lucide-react-native';
-import { useAuth } from '@/lib/auth';
-import { Entities } from '@/lib/firestore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import Input from '@/components/ui/Input';
-import Button from '@/components/ui/Button';
-import Select from '@/components/ui/Select';
-import Badge from '@/components/ui/Badge';
+import { Pencil, Plus, Target } from 'lucide-react-native';
+import { useAuth } from '../lib/auth';
+import { GoalDB, getGoalProgress } from '../lib/db';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import type { Goal, GoalType } from '../lib/types';
 
-const GOAL_TYPES = [
-  { label: 'Sessions per week', value: 'sessions_week' },
-  { label: 'Hours per week', value: 'hours_week' },
-  { label: 'Students per month', value: 'students_month' },
-  { label: 'Bible studies per month', value: 'bible_studies_month' },
+const GOAL_DEFS: { type: GoalType; label: string; unit: string }[] = [
+  { type: 'sessions_week',        label: 'Sessions per Week',       unit: 'sessions' },
+  { type: 'hours_week',           label: 'Hours per Week',          unit: 'hours' },
+  { type: 'students_month',       label: 'Students per Month',      unit: 'students' },
+  { type: 'bible_studies_month',  label: 'Bible Studies per Month', unit: 'bible studies' },
 ];
 
 export default function GoalsScreen() {
   const { user } = useAuth();
-  const router = useRouter();
   const qc = useQueryClient();
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ type: '', target: '' });
+  const [editing, setEditing] = useState<GoalType | null>(null);
+  const [val, setVal] = useState('');
 
-  const { data: goals = [], isLoading } = useQuery({
+  const { data: goals = [] } = useQuery<Goal[]>({
     queryKey: ['goals', user?.id],
-    queryFn: () => Entities.Goal.filter({ userId: user?.id }, '-created_date', 50),
-    enabled: !!user,
+    queryFn: () => GoalDB.filter({ userId: user?.id, status: 'active' }) as Promise<Goal[]>,
+    enabled: !!user?.id,
   });
 
-  const { data: sessions = [] } = useQuery({
-    queryKey: ['goalsessions', user?.id],
-    queryFn: () => Entities.EvangelismSession.filter({ userId: user?.id }, '-created_date', 200),
-    enabled: !!user,
+  const { data: progress = {} as Record<GoalType, number> } = useQuery<Record<GoalType, number>>({
+    queryKey: ['goal-progress', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return {} as Record<GoalType, number>;
+      const pairs = await Promise.all(
+        GOAL_DEFS.map(async ({ type }) => [type, await getGoalProgress(user.id, type)] as const),
+      );
+      return Object.fromEntries(pairs) as Record<GoalType, number>;
+    },
+    enabled: !!user?.id,
   });
 
-  const { data: students = [] } = useQuery({
-    queryKey: ['goalstudents', user?.id],
-    queryFn: () => Entities.Student.filter({ evangelizedByUserId: user?.id }, '-created_date', 200),
-    enabled: !!user,
-  });
-
-  const addGoal = useMutation({
-    mutationFn: () => Entities.Goal.create({
-      userId: user?.id, type: form.type, target: Number(form.target), status: 'active',
-    }),
+  const saveMutation = useMutation({
+    mutationFn: async ({ type, target }: { type: GoalType; target: number }) => {
+      const existing = goals.find((g) => g.type === type);
+      if (existing) {
+        await GoalDB.update(existing.id, { target });
+      } else {
+        await GoalDB.create({ userId: user?.id, type, target, status: 'active' });
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['goals', user?.id] });
-      setShowAdd(false);
-      setForm({ type: '', target: '' });
+      setEditing(null);
     },
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'),
   });
 
-  const deleteGoal = async (id: string) => {
-    await Entities.Goal.delete(id);
-    qc.invalidateQueries({ queryKey: ['goals', user?.id] });
-  };
+  function startEdit(type: GoalType) {
+    const g = goals.find((g) => g.type === type);
+    setVal(g ? String(g.target) : '');
+    setEditing(type);
+  }
 
-  function getProgress(goalType: string): number {
-    const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 86400000);
-    const monthAgo = new Date(now.getTime() - 30 * 86400000);
-
-    const s = sessions as Record<string, unknown>[];
-    const st = students as Record<string, unknown>[];
-
-    switch (goalType) {
-      case 'sessions_week':
-        return s.filter((x) => new Date(x.created_date as string) >= weekAgo).length;
-      case 'hours_week': {
-        const mins = s.filter((x) => new Date(x.created_date as string) >= weekAgo)
-          .reduce((acc, x) => acc + ((x.durationMinutes as number) || 0), 0);
-        return Math.round(mins / 60);
-      }
-      case 'students_month':
-        return st.filter((x) => new Date(x.created_date as string) >= monthAgo).length;
-      case 'bible_studies_month':
-        return st.filter((x) =>
-          new Date(x.created_date as string) >= monthAgo &&
-          ['Bible Study Started', 'Bible Study In Progress'].includes(x.statusPipeline as string)
-        ).length;
-      default: return 0;
-    }
+  function save(type: GoalType) {
+    const n = Number(val);
+    if (!n || n <= 0) { Alert.alert('Invalid', 'Enter a number greater than 0'); return; }
+    saveMutation.mutate({ type, target: n });
   }
 
   return (
     <ScrollView className="flex-1 bg-slate-50">
-      <View className="px-4 pt-12 pb-8">
-        <View className="flex-row items-center justify-between mb-6">
-          <View className="flex-row items-center gap-3">
-            <TouchableOpacity onPress={() => router.back()}>
-              <ArrowLeft size={22} color="#1e293b" />
-            </TouchableOpacity>
-            <Text className="text-2xl font-bold text-slate-800">Goals</Text>
-          </View>
-          <TouchableOpacity onPress={() => setShowAdd(true)}
-            className="w-9 h-9 bg-blue-600 rounded-full items-center justify-center">
-            <Plus size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
+      <View className="px-4 py-4 gap-4">
+        {GOAL_DEFS.map(({ type, label, unit }) => {
+          const goal = goals.find((g) => g.type === type);
+          const current = progress[type] ?? 0;
+          const target = goal?.target ?? 0;
+          const pct = target > 0 ? Math.min(current / target, 1) : 0;
+          const isEditing = editing === type;
 
-        {isLoading ? (
-          <View className="items-center py-16"><ActivityIndicator color="#2563eb" /></View>
-        ) : (goals as Record<string, unknown>[]).length === 0 ? (
-          <View className="items-center py-16">
-            <Text className="text-4xl mb-3">🎯</Text>
-            <Text className="text-slate-400 text-sm">No goals yet. Set your first goal!</Text>
-          </View>
-        ) : (
-          <View className="gap-4">
-            {(goals as Record<string, unknown>[]).map((goal) => {
-              const progress = getProgress(goal.type as string);
-              const target = goal.target as number;
-              const pct = Math.min(Math.round((progress / target) * 100), 100);
-              const achieved = progress >= target;
-              const label = GOAL_TYPES.find((t) => t.value === goal.type)?.label ?? goal.type as string;
-              return (
-                <Card key={goal.id as string}>
-                  <CardHeader>
-                    <View className="flex-row items-center justify-between">
-                      <CardTitle>{label}</CardTitle>
-                      <View className="flex-row items-center gap-2">
-                        {achieved && <Badge variant="green">Done ✓</Badge>}
-                        <TouchableOpacity onPress={() => deleteGoal(goal.id as string)}>
-                          <Trash2 size={16} color="#94a3b8" />
-                        </TouchableOpacity>
-                      </View>
+          return (
+            <Card key={type}>
+              <CardHeader>
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-2">
+                    <Target size={16} color="#2563eb" />
+                    <CardTitle>{label}</CardTitle>
+                  </View>
+                  <TouchableOpacity onPress={() => startEdit(type)} className="p-1">
+                    <Pencil size={15} color="#94a3b8" />
+                  </TouchableOpacity>
+                </View>
+              </CardHeader>
+              <CardContent>
+                {isEditing ? (
+                  <View className="flex-row items-center gap-3">
+                    <TextInput
+                      className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900"
+                      value={val}
+                      onChangeText={setVal}
+                      keyboardType="numeric"
+                      placeholder={`Target ${unit}`}
+                      placeholderTextColor="#94a3b8"
+                      autoFocus
+                    />
+                    <Button onPress={() => save(type)} loading={saveMutation.isPending} className="px-5 py-2.5">
+                      Save
+                    </Button>
+                    <Button variant="ghost" onPress={() => setEditing(null)} className="px-2 py-2.5">
+                      ✕
+                    </Button>
+                  </View>
+                ) : goal ? (
+                  <View className="gap-2">
+                    <View className="flex-row justify-between">
+                      <Text className="text-sm text-slate-600">
+                        {current} / {goal.target} {unit}
+                      </Text>
+                      <Text className={`text-sm font-semibold ${pct >= 1 ? 'text-green-600' : 'text-blue-600'}`}>
+                        {Math.round(pct * 100)}%
+                      </Text>
                     </View>
-                  </CardHeader>
-                  <CardContent>
-                    <View className="flex-row justify-between mb-2">
-                      <Text className="text-sm text-slate-600">Progress</Text>
-                      <Text className="text-sm font-semibold text-slate-800">{progress} / {target}</Text>
-                    </View>
-                    <View className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                    <View className="h-2.5 rounded-full bg-slate-100">
                       <View
-                        className={`h-full rounded-full ${achieved ? 'bg-green-500' : 'bg-blue-500'}`}
-                        style={{ width: `${pct}%` }}
+                        className={`h-2.5 rounded-full ${pct >= 1 ? 'bg-green-500' : 'bg-blue-600'}`}
+                        style={{ width: `${pct * 100}%` }}
                       />
                     </View>
-                    <Text className="text-xs text-slate-400 mt-1 text-right">{pct}%</Text>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </View>
-        )}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => startEdit(type)}
+                    className="flex-row items-center gap-2 py-1"
+                  >
+                    <Plus size={15} color="#2563eb" />
+                    <Text className="text-sm font-medium text-blue-600">Set a goal</Text>
+                  </TouchableOpacity>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </View>
-
-      {/* Add Goal Modal */}
-      <Modal visible={showAdd} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-          <View className="flex-1 bg-black/40 justify-end">
-            <View className="bg-white rounded-t-3xl p-6">
-              <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-lg font-semibold text-slate-800">New Goal</Text>
-                <TouchableOpacity onPress={() => setShowAdd(false)}>
-                  <X size={20} color="#94a3b8" />
-                </TouchableOpacity>
-              </View>
-              <View className="space-y-4">
-                <Select label="Goal Type" value={form.type}
-                  onValueChange={(v) => setForm({ ...form, type: v })} options={GOAL_TYPES} />
-                <Input label="Target Number" value={form.target}
-                  onChangeText={(v) => setForm({ ...form, target: v })}
-                  keyboardType="numeric" placeholder="e.g., 5" />
-                <Button onPress={() => addGoal.mutate()} disabled={!form.type || !form.target} loading={addGoal.isPending}>
-                  Add Goal
-                </Button>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </ScrollView>
   );
 }

@@ -1,212 +1,211 @@
-import React, { useState } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
-} from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
+import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, MessageCircle, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
-import { Entities } from '@/lib/firestore';
-import { useAuth } from '@/lib/auth';
-import Badge, { pipelineColor } from '@/components/ui/Badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import Select from '@/components/ui/Select';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { GraduationCap, Mail, MapPin, MessageCircle, Phone, Trash2 } from 'lucide-react-native';
 import moment from 'moment';
-
-const PIPELINE_STAGES = [
-  'Evangelized', 'Contact Exchanged', 'Bible Study Started',
-  'Bible Study In Progress', 'Visiting Fellowship', 'Connected to Chapter',
-  'Discipled / Serving', 'Not Interested / Closed',
-].map((s) => ({ label: s, value: s }));
+import { StudentDB } from '../../lib/db';
+import { useAuth } from '../../lib/auth';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
+import { Badge, pipelineBadgeColor } from '../../components/ui/Badge';
+import { Select } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
+import { PIPELINE_STAGES } from '../../lib/types';
+import type { Student, BibleStudyTopic, PipelineStage } from '../../lib/types';
 
 const BIBLE_TOPICS = [
-  'Who is God?', 'Who is Jesus?', 'The Holy Spirit', 'Salvation & Grace',
-  'Prayer', 'The Church', 'Discipleship', 'The Bible',
+  'Who is God?', 'Who is Jesus?', 'The Gospel', 'Repentance & Faith',
+  'Baptism', 'Holy Spirit', 'Prayer', 'The Church', 'Discipleship', 'Evangelism',
 ];
 
-export default function StudentProfileScreen() {
+export default function StudentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [showBibleStudy, setShowBibleStudy] = useState(false);
 
-  const { data: student, isLoading } = useQuery({
+  const { data: student, isLoading } = useQuery<Student | null>({
     queryKey: ['student', id],
-    queryFn: async () => {
-      const result = await Entities.Student.filter({}, '-created_date', 1);
-      // Fetch by id directly
-      const allStudents = await Entities.Student.list('-created_date', 500);
-      return (allStudents as Record<string, unknown>[]).find((s) => s.id === id) ?? null;
+    queryFn: () => StudentDB.getById(id!) as Promise<Student | null>,
+    enabled: !!id,
+  });
+
+  const canEdit =
+    user?.userRole === 'Admin' ||
+    user?.userRole === 'Evangelism Leader' ||
+    user?.id === student?.evangelizedByUserId;
+
+  const updateMutation = useMutation({
+    mutationFn: (patch: Partial<Student>) =>
+      StudentDB.update(id!, patch as Record<string, unknown>),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['student', id] });
+      qc.invalidateQueries({ queryKey: ['students'] });
     },
   });
 
-  const canEdit = user?.userRole === 'Admin' || user?.userRole === 'Evangelism Leader' ||
-    (student as Record<string, unknown>)?.evangelizedByUserId === user?.id;
-
-  const updatePipeline = useMutation({
-    mutationFn: (stage: string) => Entities.Student.update(id!, { statusPipeline: stage }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['student', id] }),
+  const deleteMutation = useMutation({
+    mutationFn: () => StudentDB.delete(id!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['students'] });
+      router.back();
+    },
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'),
   });
 
-  const deleteStudent = () => {
-    Alert.alert('Delete Student', 'Are you sure you want to delete this student?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          await Entities.Student.delete(id!);
-          router.back();
-        },
-      },
-    ]);
-  };
+  function toggleTopic(topic: string) {
+    if (!student || !canEdit) return;
+    const existing: BibleStudyTopic[] = student.bibleStudyTopics ?? [];
+    const found = existing.find((t) => t.topic === topic);
+    const updated: BibleStudyTopic[] = found
+      ? existing.map((t) => (t.topic === topic ? { ...t, completed: !t.completed } : t))
+      : [...existing, { topic, completed: true }];
+    updateMutation.mutate({ bibleStudyTopics: updated });
+  }
 
   if (isLoading) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
-        <ActivityIndicator color="#2563eb" />
+        <Text className="text-slate-400">Loading…</Text>
       </View>
     );
   }
-
   if (!student) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <Text className="text-slate-400">Student not found</Text>
-        <TouchableOpacity onPress={() => router.back()} className="mt-4">
-          <Text className="text-blue-600">Go Back</Text>
-        </TouchableOpacity>
       </View>
     );
   }
 
-  const s = student as Record<string, unknown>;
+  const topics = student.bibleStudyTopics ?? [];
 
   return (
     <ScrollView className="flex-1 bg-slate-50">
       {/* Header */}
-      <View className="bg-white px-4 pt-12 pb-4 border-b border-slate-100">
-        <View className="flex-row items-center justify-between mb-4">
-          <TouchableOpacity onPress={() => router.back()}
-            className="w-9 h-9 items-center justify-center">
-            <ArrowLeft size={22} color="#1e293b" />
-          </TouchableOpacity>
-          <View className="flex-row gap-2">
-            <TouchableOpacity onPress={() => router.push(`/student/${id}/chat`)}
-              className="w-9 h-9 bg-blue-50 rounded-full items-center justify-center">
-              <MessageCircle size={18} color="#2563eb" />
-            </TouchableOpacity>
-            {canEdit && (
-              <TouchableOpacity onPress={deleteStudent}
-                className="w-9 h-9 bg-red-50 rounded-full items-center justify-center">
-                <Trash2 size={18} color="#ef4444" />
-              </TouchableOpacity>
-            )}
+      <View className="border-b border-slate-200 bg-white px-5 py-6">
+        <View className="flex-row items-start justify-between">
+          <View className="flex-1 pr-2">
+            <Text className="text-xl font-bold text-slate-800">{student.name}</Text>
+            <View className="mt-1 flex-row items-center gap-1">
+              <GraduationCap size={13} color="#64748b" />
+              <Text className="text-sm text-slate-500">{student.universityName}</Text>
+            </View>
+            {(student.city || student.country) ? (
+              <View className="mt-0.5 flex-row items-center gap-1">
+                <MapPin size={13} color="#64748b" />
+                <Text className="text-sm text-slate-500">
+                  {[student.city, student.country].filter(Boolean).join(', ')}
+                </Text>
+              </View>
+            ) : null}
           </View>
+          <Badge color={pipelineBadgeColor(student.statusPipeline)}>
+            {student.statusPipeline}
+          </Badge>
         </View>
 
-        {/* Profile */}
-        <View className="items-center pb-2">
-          <View className="w-20 h-20 rounded-2xl bg-blue-100 items-center justify-center mb-3">
-            <Text className="text-3xl font-bold text-blue-700">
-              {(s.name as string)?.charAt(0)?.toUpperCase() ?? '?'}
-            </Text>
-          </View>
-          <Text className="text-xl font-bold text-slate-800">{s.name as string}</Text>
-          {Boolean(s.universityName) && <Text className="text-sm text-slate-500 mt-0.5">{s.universityName as string}</Text>}
-          <View className="mt-2">
-            <Badge variant={pipelineColor(s.statusPipeline as string)}>
-              {s.statusPipeline as string}
-            </Badge>
-          </View>
+        <View className="mt-4 flex-row flex-wrap gap-2">
+          {student.phone ? (
+            <View className="flex-row items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2">
+              <Phone size={13} color="#475569" />
+              <Text className="text-xs text-slate-600">{student.phone}</Text>
+            </View>
+          ) : null}
+          {student.email ? (
+            <View className="flex-row items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2">
+              <Mail size={13} color="#475569" />
+              <Text className="text-xs text-slate-600">{student.email}</Text>
+            </View>
+          ) : null}
         </View>
+
+        <Text className="mt-3 text-xs text-slate-400">
+          Added {moment(student.created_date).fromNow()} by {student.evangelizedByUserName}
+        </Text>
       </View>
 
       <View className="px-4 py-4 gap-4">
-        {/* Contact Info */}
-        <Card>
-          <CardHeader><CardTitle>Contact Info</CardTitle></CardHeader>
-          <CardContent>
-            <View className="gap-2">
-              {[
-                { label: 'Phone', value: s.phone },
-                { label: 'Email', value: s.email },
-                { label: 'University', value: s.universityName },
-                { label: 'Major', value: s.major },
-                { label: 'Year', value: s.collegeYear },
-                { label: 'Country', value: s.country },
-                { label: 'City', value: s.city },
-              ].filter((f) => f.value).map((field) => (
-                <View key={field.label} className="flex-row gap-2">
-                  <Text className="text-xs font-medium text-slate-400 w-20">{field.label}</Text>
-                  <Text className="text-sm text-slate-700 flex-1">{field.value as string}</Text>
-                </View>
-              ))}
-              {Boolean(s.notes) && (
-                <View className="mt-2">
-                  <Text className="text-xs font-medium text-slate-400 mb-1">Notes</Text>
-                  <Text className="text-sm text-slate-700">{s.notes as string}</Text>
-                </View>
-              )}
-            </View>
-          </CardContent>
-        </Card>
-
         {/* Pipeline */}
         {canEdit && (
           <Card>
-            <CardHeader><CardTitle>Update Stage</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Pipeline Stage</CardTitle></CardHeader>
             <CardContent>
               <Select
-                value={s.statusPipeline as string}
-                onValueChange={(v) => updatePipeline.mutate(v)}
-                options={PIPELINE_STAGES}
+                value={student.statusPipeline}
+                onValueChange={(v) => updateMutation.mutate({ statusPipeline: v as PipelineStage })}
+                options={PIPELINE_STAGES.map((s) => ({ label: s, value: s }))}
               />
             </CardContent>
           </Card>
         )}
 
-        {/* Bible Study */}
-        <TouchableOpacity onPress={() => setShowBibleStudy(!showBibleStudy)}>
-          <Card>
-            <View className="p-4 flex-row items-center justify-between">
-              <Text className="font-semibold text-slate-800">Bible Study Topics</Text>
-              {showBibleStudy ? <ChevronUp size={18} color="#64748b" /> : <ChevronDown size={18} color="#64748b" />}
-            </View>
-            {showBibleStudy && (
-              <View className="px-4 pb-4 gap-2">
-                {BIBLE_TOPICS.map((topic) => {
-                  const topics = (s.bibleStudyTopics as { topic: string; completed: boolean }[] | undefined) ?? [];
-                  const entry = topics.find((t) => t.topic === topic);
-                  return (
-                    <TouchableOpacity
-                      key={topic}
-                      onPress={() => {
-                        const updated = topics.filter((t) => t.topic !== topic);
-                        updated.push({ topic, completed: !entry?.completed });
-                        Entities.Student.update(id!, { bibleStudyTopics: updated }).then(() =>
-                          qc.invalidateQueries({ queryKey: ['student', id] })
-                        );
-                      }}
-                      className="flex-row items-center gap-3"
+        {/* Bible study checklist */}
+        <Card>
+          <CardHeader><CardTitle>Bible Study Topics</CardTitle></CardHeader>
+          <CardContent>
+            <View className="gap-2">
+              {BIBLE_TOPICS.map((topic) => {
+                const done = topics.find((t) => t.topic === topic)?.completed ?? false;
+                return (
+                  <TouchableOpacity
+                    key={topic}
+                    onPress={() => toggleTopic(topic)}
+                    disabled={!canEdit}
+                    activeOpacity={canEdit ? 0.7 : 1}
+                    className={`flex-row items-center gap-3 rounded-xl border p-3 ${
+                      done ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    <View
+                      className={`h-5 w-5 items-center justify-center rounded border-2 ${
+                        done ? 'border-green-500 bg-green-500' : 'border-slate-300'
+                      }`}
                     >
-                      <View className={`w-5 h-5 rounded border-2 items-center justify-center ${entry?.completed ? 'bg-green-500 border-green-500' : 'border-slate-300'}`}>
-                        {entry?.completed && <Text className="text-white text-xs font-bold">✓</Text>}
-                      </View>
-                      <Text className={`text-sm ${entry?.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                        {topic}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-          </Card>
-        </TouchableOpacity>
+                      {done && <Text className="text-xs font-bold text-white">✓</Text>}
+                    </View>
+                    <Text className={`text-sm ${done ? 'font-medium text-green-800' : 'text-slate-700'}`}>
+                      {topic}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </CardContent>
+        </Card>
 
-        {/* Meta */}
-        <Text className="text-xs text-slate-400 text-center">
-          Added by {s.evangelizedByUserName as string} · {moment(s.created_date as string).format('MMM D, YYYY')}
-        </Text>
+        {/* Notes */}
+        {student.notes ? (
+          <Card>
+            <CardHeader><CardTitle>Notes</CardTitle></CardHeader>
+            <CardContent>
+              <Text className="text-sm leading-relaxed text-slate-600">{student.notes}</Text>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* Actions */}
+        <Button variant="outline" onPress={() => router.push(`/student/${id}/chat` as any)} fullWidth>
+          <MessageCircle size={16} color="#475569" />
+          <Text className="text-sm font-semibold text-slate-700">Notes & Chat</Text>
+        </Button>
+
+        {canEdit && (
+          <Button
+            variant="destructive"
+            onPress={() => {
+              Alert.alert('Delete Student', 'This cannot be undone.', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate() },
+              ]);
+            }}
+            loading={deleteMutation.isPending}
+            fullWidth
+          >
+            <Trash2 size={16} color="#fff" />
+            <Text className="text-sm font-semibold text-white">Delete Student</Text>
+          </Button>
+        )}
       </View>
     </ScrollView>
   );

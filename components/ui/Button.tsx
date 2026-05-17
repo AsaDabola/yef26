@@ -1,45 +1,69 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
 
-interface ButtonProps {
-  onPress?: () => void;
+type Props = {
   children: React.ReactNode;
+  onPress?: () => void;
   variant?: Variant;
   disabled?: boolean;
   loading?: boolean;
+  fullWidth?: boolean;
   className?: string;
-}
-
-const containerClasses: Record<Variant, string> = {
-  primary:     'bg-blue-600 rounded-xl px-4 py-3 flex-row items-center justify-center',
-  secondary:   'bg-slate-100 rounded-xl px-4 py-3 flex-row items-center justify-center',
-  outline:     'border border-slate-200 bg-white rounded-xl px-4 py-3 flex-row items-center justify-center',
-  ghost:       'rounded-xl px-4 py-3 flex-row items-center justify-center',
-  destructive: 'bg-red-500 rounded-xl px-4 py-3 flex-row items-center justify-center',
 };
 
-const textClasses: Record<Variant, string> = {
+const container: Record<Variant, string> = {
+  primary:     'bg-blue-600 active:bg-blue-700',
+  secondary:   'bg-slate-100 active:bg-slate-200',
+  outline:     'border border-slate-300 bg-white active:bg-slate-50',
+  ghost:       'bg-transparent active:bg-slate-100',
+  destructive: 'bg-red-600 active:bg-red-700',
+};
+
+const textCls: Record<Variant, string> = {
   primary:     'text-white font-semibold text-sm',
   secondary:   'text-slate-700 font-semibold text-sm',
   outline:     'text-slate-700 font-semibold text-sm',
-  ghost:       'text-slate-600 text-sm',
+  ghost:       'text-slate-500 font-semibold text-sm',
   destructive: 'text-white font-semibold text-sm',
 };
 
-export default function Button({ onPress, children, variant = 'primary', disabled, loading }: ButtonProps) {
+const spinnerColor: Record<Variant, string> = {
+  primary:     '#fff',
+  secondary:   '#475569',
+  outline:     '#475569',
+  ghost:       '#475569',
+  destructive: '#fff',
+};
+
+export function Button({
+  children,
+  onPress,
+  variant = 'primary',
+  disabled,
+  loading,
+  fullWidth,
+  className = '',
+}: Props) {
+  const isDisabled = disabled || loading;
   return (
     <TouchableOpacity
       onPress={onPress}
-      disabled={disabled || loading}
+      disabled={isDisabled}
       activeOpacity={0.75}
-      className={`${containerClasses[variant]} ${disabled || loading ? 'opacity-50' : ''}`}
+      className={`flex-row items-center justify-center gap-2 rounded-xl px-4 py-3
+        ${container[variant]}
+        ${isDisabled ? 'opacity-50' : ''}
+        ${fullWidth ? 'w-full' : ''}
+        ${className}`}
     >
-      {loading && <ActivityIndicator size="small" color={variant === 'primary' ? '#fff' : '#64748b'} className="mr-2" />}
-      {typeof children === 'string'
-        ? <Text className={textClasses[variant]}>{children}</Text>
-        : children}
+      {loading && <ActivityIndicator size="small" color={spinnerColor[variant]} />}
+      {typeof children === 'string' ? (
+        <Text className={textCls[variant]}>{children}</Text>
+      ) : (
+        <View className="flex-row items-center gap-2">{children}</View>
+      )}
     </TouchableOpacity>
   );
 }

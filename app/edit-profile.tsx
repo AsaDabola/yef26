@@ -1,40 +1,27 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
+  Alert, Image, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useMutation } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
-import { ArrowLeft, Camera } from 'lucide-react-native';
-import { useAuth } from '@/lib/auth';
-import { Auth, uploadFile } from '@/lib/firestore';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Camera } from 'lucide-react-native';
+import { AuthActions, useAuth } from '../lib/auth';
+import { uploadFile } from '../lib/upload';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
 
 export default function EditProfileScreen() {
-  const { user, refreshUser } = useAuth();
   const router = useRouter();
+  const { user, refreshUser } = useAuth();
+  const [name, setName] = useState(user?.full_name ?? user?.name ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
-  const [saving, setSaving] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await Auth.updateMe({ bio });
-      await refreshUser();
-      router.back();
-    } catch {
-      Alert.alert('Error', 'Could not save profile.');
-    }
-    setSaving(false);
-  };
-
-  const handlePickPhoto = async () => {
+  async function pickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      Alert.alert('Permission needed', 'Please allow access to photos.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -44,87 +31,81 @@ export default function EditProfileScreen() {
       quality: 0.7,
     });
     if (!result.canceled && result.assets[0]) {
-      setUploadingPhoto(true);
-      try {
-        const url = await uploadFile({ uri: result.assets[0].uri, name: 'profile.jpg' });
-        await Auth.updateMe({ profilePhoto: url });
-        await refreshUser();
-      } catch {
-        Alert.alert('Error', 'Could not upload photo.');
-      }
-      setUploadingPhoto(false);
+      setPhotoUri(result.assets[0].uri);
     }
-  };
+  }
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      let profilePhoto = user?.profilePhoto;
+      if (photoUri) {
+        profilePhoto = await uploadFile(photoUri, 'profile.jpg');
+      }
+      await AuthActions.updateProfile(user!.id, {
+        name: name.trim(),
+        full_name: name.trim(),
+        bio: bio.trim(),
+        profilePhoto,
+      });
+    },
+    onSuccess: async () => {
+      await refreshUser();
+      router.back();
+    },
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save'),
+  });
+
+  const photoSrc = photoUri ?? user?.profilePhoto;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 bg-slate-50">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <View className="px-4 pt-12 pb-8">
-          <View className="flex-row items-center justify-between mb-6">
-            <View className="flex-row items-center gap-3">
-              <TouchableOpacity onPress={() => router.back()}>
-                <ArrowLeft size={22} color="#1e293b" />
-              </TouchableOpacity>
-              <Text className="text-2xl font-bold text-slate-800">Edit Profile</Text>
+    <KeyboardAvoidingView
+      className="flex-1 bg-slate-50"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+        {/* Avatar picker */}
+        <View className="items-center pb-4 pt-8">
+          <TouchableOpacity onPress={pickPhoto} className="relative">
+            {photoSrc ? (
+              <Image source={{ uri: photoSrc }} className="h-24 w-24 rounded-full" />
+            ) : (
+              <View className="h-24 w-24 items-center justify-center rounded-full bg-blue-100">
+                <Text className="text-3xl font-bold text-blue-600">
+                  {(name || '?')[0].toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-blue-600">
+              <Camera size={14} color="#fff" />
             </View>
-            <Button onPress={handleSave} loading={saving} className="px-4 py-2">Save</Button>
-          </View>
+          </TouchableOpacity>
+          <Text className="mt-2 text-xs text-slate-500">Tap to change photo</Text>
+        </View>
 
-          {/* Photo */}
-          <Card className="mb-5 p-5 items-center">
-            <TouchableOpacity onPress={handlePickPhoto} className="relative">
-              <View className="w-24 h-24 rounded-2xl bg-blue-600 items-center justify-center shadow-md">
-                {uploadingPhoto ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text className="text-white text-4xl font-bold">
-                    {user?.full_name?.charAt(0)?.toUpperCase() ?? '?'}
-                  </Text>
-                )}
-              </View>
-              <View className="absolute -bottom-2 -right-2 w-9 h-9 bg-blue-600 rounded-full items-center justify-center shadow">
-                <Camera size={16} color="#fff" />
-              </View>
-            </TouchableOpacity>
-            <Text className="text-xs text-slate-400 mt-4">Tap to change photo</Text>
-          </Card>
-
-          {/* Read-only fields */}
-          <Card className="mb-4">
-            <CardContent>
-              <View className="gap-3 pt-4">
-                {[
-                  { label: 'Name', value: user?.full_name },
-                  { label: 'Email', value: user?.email },
-                  { label: 'Chapter', value: user?.chapterName },
-                  { label: 'Country', value: user?.country },
-                ].map((f) => (
-                  <View key={f.label} className="flex-row items-center gap-3">
-                    <Text className="text-xs font-medium text-slate-400 w-16">{f.label}</Text>
-                    <Text className="text-sm text-slate-700 flex-1">{f.value ?? '—'}</Text>
-                  </View>
-                ))}
-              </View>
-            </CardContent>
-          </Card>
-
-          {/* Editable */}
-          <Card className="mb-4">
-            <CardContent>
-              <View className="pt-4">
-                <Input
-                  label="Bio"
-                  value={bio}
-                  onChangeText={setBio}
-                  placeholder="Tell your chapter about yourself..."
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  className="min-h-24"
-                />
-              </View>
-            </CardContent>
-          </Card>
+        <View className="px-5 gap-4 pb-8">
+          <Input
+            label="Full Name"
+            placeholder="Your name"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+          />
+          <Input
+            label="Bio (optional)"
+            placeholder="Tell us about yourself…"
+            value={bio}
+            onChangeText={setBio}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            style={{ minHeight: 100 }}
+          />
+          <Button onPress={() => mutation.mutate()} loading={mutation.isPending} fullWidth className="mt-2">
+            Save Changes
+          </Button>
+          <Button variant="outline" onPress={() => router.back()} fullWidth>
+            Cancel
+          </Button>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

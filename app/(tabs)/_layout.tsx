@@ -1,85 +1,63 @@
+import React from 'react';
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
-import { View, Text } from 'react-native';
-import { Home, Newspaper, Plus, Users, User, type LucideIcon } from 'lucide-react-native';
-import { useEvangelizing } from '@/hooks/useEvangelizing';
-
-function TabIcon({ Icon, label, focused, isCenter, isEvangelizing }: {
-  Icon: LucideIcon;
-  label: string;
-  focused: boolean;
-  isCenter?: boolean;
-  isEvangelizing?: boolean;
-}) {
-  if (isCenter) {
-    return (
-      <View
-        className={`w-14 h-14 rounded-full items-center justify-center shadow-lg ${
-          isEvangelizing ? 'bg-red-500' : 'bg-blue-600'
-        }`}
-        style={{ marginTop: -20 }}
-      >
-        <Icon size={24} color="#fff" />
-      </View>
-    );
-  }
-  return (
-    <View className="items-center gap-0.5">
-      <Icon size={22} color={focused ? '#2563eb' : '#94a3b8'} />
-      <Text className={`text-xs ${focused ? 'text-blue-600 font-medium' : 'text-slate-500'}`}>
-        {label}
-      </Text>
-    </View>
-  );
-}
+import { Home, Newspaper, Plus, Users, User } from 'lucide-react-native';
+import { useSessionStore } from '../../lib/store';
 
 export default function TabsLayout() {
-  const { isEvangelizing } = useEvangelizing();
+  const isLive = useSessionStore((s) => s.isEvangelizing);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          height: 64,
-          borderTopWidth: 1,
-          borderTopColor: '#f1f5f9',
-          paddingBottom: 8,
-          paddingTop: 4,
-          backgroundColor: '#fff',
-        },
-        tabBarShowLabel: false,
+        tabBarActiveTintColor: '#2563eb',
+        tabBarInactiveTintColor: '#94a3b8',
+        tabBarStyle: { borderTopColor: '#e2e8f0', height: 60, paddingBottom: 8 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Home} label="Home" focused={focused} />,
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="news"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Newspaper} label="News" focused={focused} />,
+          title: 'News',
+          tabBarIcon: ({ color, size }) => <Newspaper size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="add"
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon Icon={Plus} label="Add" focused={focused} isCenter isEvangelizing={isEvangelizing} />
+          title: '',
+          tabBarIcon: () => (
+            <View
+              className={`-mt-5 h-14 w-14 items-center justify-center rounded-full shadow-lg ${
+                isLive ? 'bg-red-500' : 'bg-blue-600'
+              }`}
+            >
+              <Plus size={28} color="#fff" />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="students"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={Users} label="Students" focused={focused} />,
+          title: 'Students',
+          tabBarIcon: ({ color, size }) => <Users size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon Icon={User} label="Profile" focused={focused} />,
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
         }}
       />
     </Tabs>

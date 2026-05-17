@@ -1,50 +1,45 @@
 {
   "expo": {
-    "name": "YEF Tracker",
+    "name": "YEF Evangelism",
     "slug": "yef-evangelism-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1e3a5f"
+      "backgroundColor": "#2563eb"
     },
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.yef.tracker",
-      "infoPlist": {
-        "NSCameraUsageDescription": "YEF Tracker uses the camera to take photos for student profiles.",
-        "NSPhotoLibraryUsageDescription": "YEF Tracker accesses your photos for profile pictures."
-      }
+      "bundleIdentifier": "com.yef.evangelismtracker"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1e3a5f"
+        "backgroundColor": "#2563eb"
       },
-      "package": "com.yef.tracker",
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+      "package": "com.yef.evangelismtracker"
     },
     "web": {
-      "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
-      "expo-font",
       [
         "expo-image-picker",
         {
-          "photosPermission": "YEF Tracker accesses your photos for profile pictures."
+          "photosPermission": "Allow YEF Evangelism to access your photos."
         }
       ]
     ],
+    "scheme": "yef-evangelism",
     "experiments": {
-      "typedRoutes": true
-    },
-    "scheme": "yeftracker"
+      "typedRoutes": false
+    }
   }
 }

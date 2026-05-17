@@ -1,88 +1,75 @@
 import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { Alert, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
-import { Entities, type UserProfile } from '@/lib/firestore';
-import { useAuth } from '@/lib/auth';
-import { Card } from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import Select from '@/components/ui/Select';
+import { useAuth } from '../lib/auth';
+import { UserDB } from '../lib/db';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Select } from '../components/ui/Select';
+import type { UserProfile, UserRole } from '../lib/types';
 
-const ROLES = [
-  { label: 'Member', value: 'Member' },
+const ROLES: { label: string; value: UserRole }[] = [
+  { label: 'Member',            value: 'Member' },
   { label: 'Evangelism Leader', value: 'Evangelism Leader' },
-  { label: 'Admin', value: 'Admin' },
+  { label: 'Admin',             value: 'Admin' },
 ];
+
+function roleColor(role?: UserRole | string) {
+  if (role === 'Admin') return 'red' as const;
+  if (role === 'Evangelism Leader') return 'purple' as const;
+  return 'slate' as const;
+}
 
 export default function ManageRolesScreen() {
   const { user } = useAuth();
-  const router = useRouter();
   const qc = useQueryClient();
 
-  if (user?.userRole !== 'Admin') {
-    return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
-        <Text className="text-slate-400">Admin access required</Text>
-      </View>
-    );
-  }
-
-  const { data: members = [], isLoading } = useQuery({
-    queryKey: ['membersRoles'],
-    queryFn: () => Entities.User.list(),
+  const { data: members = [], isFetching, refetch } = useQuery<UserProfile[]>({
+    queryKey: ['members'],
+    queryFn: () => UserDB.list(),
   });
 
-  const updateRole = useMutation({
-    mutationFn: ({ id, role }: { id: string; role: string }) =>
-      Entities.User.update(id, { userRole: role }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['membersRoles'] }),
+  const updateMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: UserRole }) =>
+      UserDB.update(id, { userRole: role }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['members'] }),
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'),
   });
+
+  const others = members.filter((m) => m.id !== user?.id);
 
   return (
-    <View className="flex-1 bg-slate-50">
-      <View className="px-4 pt-12 pb-4 bg-white border-b border-slate-100 flex-row items-center gap-3">
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeft size={22} color="#1e293b" />
-        </TouchableOpacity>
-        <Text className="text-2xl font-bold text-slate-800">Manage Roles</Text>
-      </View>
-
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center"><ActivityIndicator color="#2563eb" /></View>
-      ) : (
-        <FlatList
-          data={members as UserProfile[]}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16, gap: 10 }}
-          renderItem={({ item: member }) => (
-            <Card className="p-4">
-              <View className="flex-row items-center gap-3 mb-3">
-                <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center">
-                  <Text className="text-blue-700 font-semibold text-sm">
-                    {member.full_name?.charAt(0)?.toUpperCase() ?? '?'}
+    <ScrollView
+      className="flex-1 bg-slate-50"
+      refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} />}
+    >
+      <View className="px-4 py-4 gap-3">
+        <Text className="text-xs text-slate-500">
+          Manage roles for {others.length} members. You cannot change your own role.
+        </Text>
+        {others.map((m) => (
+          <Card key={m.id}>
+            <CardContent className="pt-3">
+              <View className="mb-3 flex-row items-center justify-between">
+                <View>
+                  <Text className="text-sm font-semibold text-slate-800">
+                    {m.full_name ?? m.name ?? m.email}
                   </Text>
+                  <Text className="text-xs text-slate-500">{m.email}</Text>
+                  <Text className="text-xs text-slate-400">{m.chapterName}</Text>
                 </View>
-                <View className="flex-1">
-                  <Text className="font-semibold text-slate-800">{member.full_name}</Text>
-                  <Text className="text-xs text-slate-500">{member.email}</Text>
-                </View>
+                <Badge color={roleColor(m.userRole)}>{m.userRole ?? 'Member'}</Badge>
               </View>
               <Select
-                value={member.userRole ?? 'Member'}
-                onValueChange={(role) => {
-                  if (member.id === user?.id) {
-                    Alert.alert('Note', "You can't change your own role.");
-                    return;
-                  }
-                  updateRole.mutate({ id: member.id, role });
-                }}
+                value={m.userRole ?? 'Member'}
+                onValueChange={(v) => updateMutation.mutate({ id: m.id, role: v as UserRole })}
                 options={ROLES}
+                placeholder="Select role"
               />
-            </Card>
-          )}
-        />
-      )}
-    </View>
+            </CardContent>
+          </Card>
+        ))}
+      </View>
+    </ScrollView>
   );
 }

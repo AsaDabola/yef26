@@ -1,311 +1,287 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  Modal, KeyboardAvoidingView, Platform, Alert,
+  Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, Text,
+  TouchableOpacity, View,
 } from 'react-native';
-import { Play, Square, UserPlus, Newspaper, MapPin, Users, X, Loader2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/lib/auth';
-import { Entities } from '@/lib/firestore';
-import { useEvangelizing } from '@/hooks/useEvangelizing';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import Select from '@/components/ui/Select';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Clock, MapPin, Newspaper, UserPlus, Users } from 'lucide-react-native';
+import { useAuth } from '../../lib/auth';
+import { StudentDB, SessionDB } from '../../lib/db';
+import { useSessionStore } from '../../lib/store';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
+import type { SessionMode } from '../../lib/types';
 
-function formatTime(seconds: number) {
-  const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
-  const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${h}:${m}:${s}`;
+// ── Live timer ──────────────────────────────────────────────────────────────
+function useElapsed(startTime: string | null) {
+  const [elapsed, setElapsed] = useState('0:00');
+  useEffect(() => {
+    if (!startTime) return;
+    const tick = () => {
+      const s = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
+      setElapsed(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
+  return elapsed;
 }
 
-export default function AddScreen() {
+// ── Add-student form (shared by both "live" and "standalone" modes) ─────────
+function AddStudentModal({
+  visible, onClose, onSaved,
+}: { visible: boolean; onClose: () => void; onSaved?: (id: string) => void }) {
   const { user } = useAuth();
-  const router = useRouter();
-  const { isEvangelizing, sessionData, startEvangelizing, stopEvangelizing, addStudentToSession } = useEvangelizing();
+  const qc = useQueryClient();
+  const [name, setName] = useState('');
+  const [uni, setUni] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
 
-  const [elapsed, setElapsed] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [showStudentModal, setShowStudentModal] = useState(false);
-
-  const [sessionForm, setSessionForm] = useState({ modeType: 'Individual', locationName: '' });
-  const [studentForm, setStudentForm] = useState({ name: '', universityName: '', phone: '', email: '' });
-  const [newsForm, setNewsForm] = useState({ title: '', content: '', isGlobal: false });
-
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (isEvangelizing && sessionData?.startTime) {
-      intervalRef.current = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - new Date(sessionData.startTime).getTime()) / 1000));
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      setElapsed(0);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isEvangelizing, sessionData?.startTime]);
-
-  const handleStart = () => {
-    startEvangelizing({ modeType: sessionForm.modeType, locationName: sessionForm.locationName });
-  };
-
-  const handleStop = async () => {
-    setSaving(true);
-    const result = stopEvangelizing();
-    try {
-      await Entities.EvangelismSession.create({
-        ...result,
-        userId: user?.id,
-        userName: user?.full_name,
-        chapterId: user?.chapterId,
-        chapterName: user?.chapterName,
-        country: user?.country,
-      });
-      router.push('/(tabs)/profile');
-    } catch {
-      Alert.alert('Error', 'Could not save session.');
-    }
-    setSaving(false);
-  };
-
-  const handleAddStudent = async () => {
-    if (!studentForm.name) return;
-    setSaving(true);
-    try {
-      const s = await Entities.Student.create({
-        ...studentForm,
-        evangelizedByUserId: user?.id,
-        evangelizedByUserName: user?.full_name,
-        evangelizedByChapterId: user?.chapterId,
-        evangelizedByChapterName: user?.chapterName,
-        country: user?.country,
+  const mutation = useMutation({
+    mutationFn: () =>
+      StudentDB.create({
+        name: name.trim(),
+        universityName: uni.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        country: user?.country ?? '',
         statusPipeline: 'Evangelized',
-      });
-      if (isEvangelizing) addStudentToSession(s.id as string);
-      setStudentForm({ name: '', universityName: '', phone: '', email: '' });
-      setShowStudentModal(false);
-      Alert.alert('Added!', `${studentForm.name} has been added.`);
-    } catch {
-      Alert.alert('Error', 'Could not add student.');
-    }
-    setSaving(false);
-  };
+        evangelizedByUserId: user?.id,
+        evangelizedByUserName: user?.full_name ?? user?.name ?? '',
+        evangelizedByChapterId: user?.chapterId ?? '',
+        evangelizedByChapterName: user?.chapterName ?? '',
+        bibleStudyTopics: [],
+      }) as Promise<{ id: string }>,
+    onSuccess: (s) => {
+      qc.invalidateQueries({ queryKey: ['students'] });
+      onSaved?.(s.id);
+      setName(''); setUni(''); setPhone(''); setEmail('');
+      onClose();
+      Alert.alert('Saved!', 'Student added successfully.');
+    },
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'),
+  });
 
-  const handleCreateNews = async () => {
-    if (!newsForm.title || !newsForm.content) return;
-    setSaving(true);
-    try {
-      await Entities.NewsPost.create({
-        ...newsForm,
-        chapterId: newsForm.isGlobal ? null : user?.chapterId,
-        country: user?.country,
-        authorId: user?.id,
-        authorName: user?.full_name,
-      });
-      setNewsForm({ title: '', content: '', isGlobal: false });
-      Alert.alert('Published!', 'News post created.');
-      router.push('/(tabs)/news');
-    } catch {
-      Alert.alert('Error', 'Could not publish post.');
+  function save() {
+    if (!name.trim() || !uni.trim()) {
+      Alert.alert('Required', 'Name and university are required');
+      return;
     }
-    setSaving(false);
-  };
-
-  const canCreateNews = user?.userRole === 'Admin' || user?.userRole === 'Evangelism Leader';
+    mutation.mutate();
+  }
 
   return (
-    <View className="flex-1 bg-slate-50">
-      {/* Evangelizing Banner */}
-      {isEvangelizing && (
-        <View className="bg-blue-600 px-4 py-2 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <View className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-            <Text className="text-white font-medium text-sm">Evangelizing Mode Active</Text>
-          </View>
-          <Text className="text-blue-200 text-sm">{sessionData?.modeType}</Text>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <KeyboardAvoidingView
+        className="flex-1 bg-white"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View className="border-b border-slate-100 px-5 pb-4 pt-6">
+          <Text className="text-lg font-bold text-slate-800">Add Student</Text>
         </View>
-      )}
-
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingTop: isEvangelizing ? 8 : 48 }}>
-        <Text className="text-2xl font-bold text-slate-800 mb-1">
-          {isEvangelizing ? 'Evangelizing Mode' : 'Quick Actions'}
-        </Text>
-        <Text className="text-sm text-slate-500 mb-6">
-          {isEvangelizing ? 'Session in progress' : 'Start a session or add records'}
-        </Text>
-
-        {/* Active Session Card */}
-        {isEvangelizing && (
-          <View className="bg-blue-600 rounded-2xl p-6 mb-5">
-            <Text className="text-blue-200 text-sm text-center mb-2">Time Evangelizing</Text>
-            <Text className="text-5xl font-bold text-white text-center font-mono tracking-wider">
-              {formatTime(elapsed)}
-            </Text>
-            <View className="flex-row justify-center gap-4 mt-4 mb-5">
-              <View className="flex-row items-center gap-1">
-                <Users size={14} color="#bfdbfe" />
-                <Text className="text-blue-200 text-xs">{sessionData?.modeType}</Text>
-              </View>
-              {sessionData?.locationName ? (
-                <View className="flex-row items-center gap-1">
-                  <MapPin size={14} color="#bfdbfe" />
-                  <Text className="text-blue-200 text-xs">{sessionData.locationName}</Text>
-                </View>
-              ) : null}
-              <Text className="text-blue-200 text-xs">
-                {sessionData?.studentIds?.length ?? 0} students
-              </Text>
+        <ScrollView className="flex-1 px-5 py-4" keyboardShouldPersistTaps="handled">
+          <View className="gap-4">
+            <Input label="Full Name *" placeholder="Student's name" value={name} onChangeText={setName} />
+            <Input label="University *" placeholder="University name" value={uni} onChangeText={setUni} />
+            <Input label="Phone" placeholder="Phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            <Input label="Email" placeholder="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+            <View className="mt-2 flex-row gap-3">
+              <Button variant="outline" onPress={onClose} className="flex-1">Cancel</Button>
+              <Button onPress={save} loading={mutation.isPending} className="flex-1">Save</Button>
             </View>
-            <TouchableOpacity
-              onPress={() => setShowStudentModal(true)}
-              className="bg-white/20 rounded-xl py-3 items-center mb-3"
-            >
-              <View className="flex-row items-center gap-2">
-                <UserPlus size={16} color="#fff" />
-                <Text className="text-white font-medium">Add Student</Text>
-              </View>
-            </TouchableOpacity>
-            <Button variant="destructive" onPress={handleStop} loading={saving}>
-              <View className="flex-row items-center gap-2">
-                <Square size={16} color="#fff" />
-                <Text className="text-white font-semibold">End Session</Text>
-              </View>
-            </Button>
           </View>
-        )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
 
-        {/* Start Session */}
-        {!isEvangelizing && (
-          <Card className="mb-4">
-            <CardHeader>
-              <CardTitle>
-                <View className="flex-row items-center gap-2">
-                  <Play size={18} color="#2563eb" />
-                  <Text className="text-base font-semibold text-slate-800">Start Evangelizing</Text>
-                </View>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <View className="space-y-3">
-                <Select
-                  label="Session Type"
-                  value={sessionForm.modeType}
-                  onValueChange={(v) => setSessionForm({ ...sessionForm, modeType: v })}
-                  options={[{ label: 'Individual', value: 'Individual' }, { label: 'Group', value: 'Group' }]}
-                />
-                <Input
-                  label="Location (optional)"
-                  value={sessionForm.locationName}
-                  onChangeText={(v) => setSessionForm({ ...sessionForm, locationName: v })}
-                  placeholder="e.g., Campus Library"
-                />
-                <Button onPress={handleStart}>
-                  <View className="flex-row items-center gap-2">
-                    <Play size={16} color="#fff" />
-                    <Text className="text-white font-semibold">Start Session</Text>
-                  </View>
-                </Button>
-              </View>
-            </CardContent>
-          </Card>
-        )}
+// ── Main screen ─────────────────────────────────────────────────────────────
+export default function AddScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { isEvangelizing, session, start, stop, addStudent } = useSessionStore();
+  const elapsed = useElapsed(isEvangelizing ? session?.startTime ?? null : null);
 
-        {/* Quick Add Student */}
-        {!isEvangelizing && (
-          <TouchableOpacity onPress={() => setShowStudentModal(true)}>
-            <Card className="mb-4 p-4">
-              <View className="flex-row items-center gap-3">
-                <View className="w-10 h-10 rounded-xl bg-green-100 items-center justify-center">
-                  <UserPlus size={20} color="#16a34a" />
-                </View>
-                <View className="flex-1">
-                  <Text className="font-medium text-slate-800">Add New Student</Text>
-                  <Text className="text-xs text-slate-500">Record a student contact</Text>
-                </View>
-              </View>
-            </Card>
+  const [showStart, setShowStart] = useState(false);
+  const [showAddStudent, setShowAddStudent] = useState(false);
+  const [mode, setMode] = useState<SessionMode>('Individual');
+  const [location, setLocation] = useState('');
+
+  const endMutation = useMutation({
+    mutationFn: async () => {
+      const s = stop();
+      await SessionDB.create({
+        ...s,
+        userId: user?.id,
+        userName: user?.full_name ?? user?.name ?? '',
+        chapterId: user?.chapterId ?? '',
+        chapterName: user?.chapterName ?? '',
+        country: user?.country ?? '',
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      Alert.alert('Session Saved!', 'Your evangelism session has been recorded.');
+    },
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'),
+  });
+
+  function confirmEnd() {
+    Alert.alert('End Session', 'End and save this session?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'End Session', style: 'destructive', onPress: () => endMutation.mutate() },
+    ]);
+  }
+
+  // ── Live session view ──────────────────────────────────────────────────────
+  if (isEvangelizing && session) {
+    return (
+      <View className="flex-1 bg-slate-50">
+        <View className="bg-red-500 px-5 pb-6 pt-14">
+          <View className="mb-1 flex-row items-center gap-2">
+            <View className="h-2 w-2 rounded-full bg-white" />
+            <Text className="text-sm font-semibold text-white">LIVE SESSION</Text>
+          </View>
+          <View className="flex-row items-center gap-2">
+            <Clock size={22} color="#fff" />
+            <Text className="text-4xl font-bold text-white">{elapsed}</Text>
+          </View>
+          {session.locationName ? (
+            <View className="mt-1 flex-row items-center gap-1">
+              <MapPin size={13} color="#fecaca" />
+              <Text className="text-xs text-red-200">{session.locationName}</Text>
+            </View>
+          ) : null}
+          <View className="mt-1 flex-row items-center gap-1">
+            <Users size={13} color="#fecaca" />
+            <Text className="text-xs text-red-200">{session.studentIds.length} students added</Text>
+          </View>
+        </View>
+
+        <View className="px-4 pt-4 gap-3">
+          <TouchableOpacity
+            onPress={() => setShowAddStudent(true)}
+            className="flex-row items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5"
+          >
+            <View className="h-12 w-12 items-center justify-center rounded-2xl bg-green-50">
+              <UserPlus size={22} color="#16a34a" />
+            </View>
+            <View>
+              <Text className="text-base font-bold text-slate-800">Add Student</Text>
+              <Text className="text-xs text-slate-500">Log someone you evangelized</Text>
+            </View>
           </TouchableOpacity>
-        )}
 
-        {/* Create News */}
-        {canCreateNews && !isEvangelizing && (
-          <Card className="mb-4">
-            <CardHeader>
-              <CardTitle>
-                <View className="flex-row items-center gap-2">
-                  <Newspaper size={18} color="#4f46e5" />
-                  <Text className="text-base font-semibold text-slate-800">Create News Post</Text>
-                </View>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <View className="space-y-3">
-                <Input label="Title *" value={newsForm.title}
-                  onChangeText={(v) => setNewsForm({ ...newsForm, title: v })} placeholder="Post title" />
-                <Input label="Content *" value={newsForm.content}
-                  onChangeText={(v) => setNewsForm({ ...newsForm, content: v })}
-                  placeholder="Write your update..." multiline numberOfLines={4}
-                  textAlignVertical="top" className="min-h-24" />
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-sm text-slate-700">Post Globally</Text>
-                  <TouchableOpacity
-                    onPress={() => setNewsForm({ ...newsForm, isGlobal: !newsForm.isGlobal })}
-                    className={`w-12 h-6 rounded-full ${newsForm.isGlobal ? 'bg-blue-600' : 'bg-slate-200'} justify-center`}
-                  >
-                    <View className={`w-5 h-5 rounded-full bg-white shadow mx-0.5 ${newsForm.isGlobal ? 'ml-6' : ''}`} />
-                  </TouchableOpacity>
-                </View>
+          <Button variant="destructive" onPress={confirmEnd} loading={endMutation.isPending} fullWidth>
+            End Session
+          </Button>
+        </View>
+
+        <AddStudentModal
+          visible={showAddStudent}
+          onClose={() => setShowAddStudent(false)}
+          onSaved={addStudent}
+        />
+      </View>
+    );
+  }
+
+  // ── Idle view ──────────────────────────────────────────────────────────────
+  return (
+    <View className="flex-1 bg-slate-50">
+      <View className="border-b border-slate-200 bg-white px-5 pb-4 pt-14">
+        <Text className="text-xl font-bold text-slate-800">Quick Actions</Text>
+      </View>
+
+      <View className="px-4 pt-4 gap-3">
+        <TouchableOpacity
+          onPress={() => setShowStart(true)}
+          className="flex-row items-center gap-4 rounded-2xl bg-blue-600 p-5"
+        >
+          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-blue-500">
+            <Clock size={22} color="#fff" />
+          </View>
+          <View>
+            <Text className="text-base font-bold text-white">Start Evangelizing</Text>
+            <Text className="text-xs text-blue-200">Start a timed session</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setShowAddStudent(true)}
+          className="flex-row items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5"
+        >
+          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-green-50">
+            <UserPlus size={22} color="#16a34a" />
+          </View>
+          <View>
+            <Text className="text-base font-bold text-slate-800">Add Student</Text>
+            <Text className="text-xs text-slate-500">Log a contact without a session</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push('/news')}
+          className="flex-row items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5"
+        >
+          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-purple-50">
+            <Newspaper size={22} color="#7c3aed" />
+          </View>
+          <View>
+            <Text className="text-base font-bold text-slate-800">Post News</Text>
+            <Text className="text-xs text-slate-500">Share with your chapter or globally</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Start session modal */}
+      <Modal visible={showStart} transparent animationType="slide">
+        <KeyboardAvoidingView
+          className="flex-1 justify-end"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View className="rounded-t-3xl bg-white px-5 pb-10 pt-6">
+            <Text className="mb-4 text-lg font-bold text-slate-800">Start Session</Text>
+            <View className="gap-4">
+              <Select
+                label="Session Type"
+                value={mode}
+                onValueChange={(v) => setMode(v as SessionMode)}
+                options={[
+                  { label: 'Individual', value: 'Individual' },
+                  { label: 'Group', value: 'Group' },
+                ]}
+              />
+              <Input
+                label="Location (optional)"
+                placeholder="e.g. Campus Library"
+                value={location}
+                onChangeText={setLocation}
+              />
+              <View className="flex-row gap-3">
+                <Button variant="outline" onPress={() => setShowStart(false)} className="flex-1">Cancel</Button>
                 <Button
-                  onPress={handleCreateNews}
-                  disabled={!newsForm.title || !newsForm.content}
-                  loading={saving}
+                  onPress={() => { start({ modeType: mode, locationName: location }); setShowStart(false); }}
+                  className="flex-1"
                 >
-                  Publish Post
-                </Button>
-              </View>
-            </CardContent>
-          </Card>
-        )}
-      </ScrollView>
-
-      {/* Add Student Modal */}
-      <Modal visible={showStudentModal} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-          <View className="flex-1 bg-black/40 justify-end">
-            <View className="bg-white rounded-t-3xl p-6">
-              <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-lg font-semibold text-slate-800">Quick Add Student</Text>
-                <TouchableOpacity onPress={() => setShowStudentModal(false)}>
-                  <X size={20} color="#94a3b8" />
-                </TouchableOpacity>
-              </View>
-              <View className="space-y-3">
-                <Input label="Name *" value={studentForm.name}
-                  onChangeText={(v) => setStudentForm({ ...studentForm, name: v })} placeholder="Student's name" />
-                <Input label="University" value={studentForm.universityName}
-                  onChangeText={(v) => setStudentForm({ ...studentForm, universityName: v })} placeholder="e.g., UCLA" />
-                <View className="flex-row gap-3">
-                  <View className="flex-1">
-                    <Input label="Phone" value={studentForm.phone}
-                      onChangeText={(v) => setStudentForm({ ...studentForm, phone: v })}
-                      placeholder="Phone" keyboardType="phone-pad" />
-                  </View>
-                  <View className="flex-1">
-                    <Input label="Email" value={studentForm.email}
-                      onChangeText={(v) => setStudentForm({ ...studentForm, email: v })}
-                      placeholder="Email" keyboardType="email-address" autoCapitalize="none" />
-                  </View>
-                </View>
-                <Button onPress={handleAddStudent} disabled={!studentForm.name} loading={saving}>
-                  Add Student
+                  Start
                 </Button>
               </View>
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <AddStudentModal
+        visible={showAddStudent}
+        onClose={() => setShowAddStudent(false)}
+      />
     </View>
   );
 }
