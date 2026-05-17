@@ -1,62 +1,61 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView } from 'react-native';
+import {
+  View, Text, TouchableOpacity, Modal, ScrollView, SafeAreaView, Pressable,
+} from 'react-native';
 import { ChevronDown, Check } from 'lucide-react-native';
 
-interface Option {
-  label: string;
-  value: string;
-}
+type Option = { label: string; value: string };
 
-interface SelectProps {
+type Props = {
   value?: string;
   onValueChange: (value: string) => void;
   options: Option[];
   placeholder?: string;
   label?: string;
-}
+};
 
-export default function Select({ value, onValueChange, options, placeholder = 'Select...', label }: SelectProps) {
+export function Select({ value, onValueChange, options, placeholder = 'Select...', label }: Props) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 
   return (
-    <View className="w-full">
-      {label && <Text className="text-xs font-medium text-slate-500 mb-1">{label}</Text>}
+    <View className="gap-1">
+      {label && <Text className="text-sm font-medium text-slate-700">{label}</Text>}
       <TouchableOpacity
         onPress={() => setOpen(true)}
-        className="border border-slate-200 rounded-xl bg-white px-3 py-3 flex-row items-center justify-between"
+        className="flex-row items-center justify-between rounded-xl border border-slate-300 bg-white px-4 py-3"
+        activeOpacity={0.8}
       >
-        <Text className={selected ? 'text-sm text-slate-800' : 'text-sm text-slate-400'}>
+        <Text className={`text-sm ${selected ? 'text-slate-900' : 'text-slate-400'}`}>
           {selected?.label ?? placeholder}
         </Text>
         <ChevronDown size={16} color="#94a3b8" />
       </TouchableOpacity>
 
       <Modal visible={open} animationType="slide" transparent>
-        <View className="flex-1 bg-black/40 justify-end">
-          <SafeAreaView className="bg-white rounded-t-3xl">
-            <View className="p-4 border-b border-slate-100">
-              <Text className="text-center font-semibold text-slate-800">{label ?? 'Select'}</Text>
-            </View>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item.value}
-              style={{ maxHeight: 320 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => { onValueChange(item.value); setOpen(false); }}
-                  className="flex-row items-center justify-between px-4 py-3 border-b border-slate-50"
-                >
-                  <Text className="text-sm text-slate-800">{item.label}</Text>
-                  {value === item.value && <Check size={16} color="#2563eb" />}
-                </TouchableOpacity>
-              )}
-            />
-            <TouchableOpacity onPress={() => setOpen(false)} className="p-4">
-              <Text className="text-center text-sm text-slate-500">Cancel</Text>
-            </TouchableOpacity>
-          </SafeAreaView>
-        </View>
+        <Pressable className="flex-1 bg-black/40" onPress={() => setOpen(false)} />
+        <SafeAreaView className="bg-white rounded-t-3xl max-h-96">
+          <View className="px-4 py-3 border-b border-slate-100">
+            <Text className="text-base font-semibold text-slate-800 text-center">
+              {label ?? placeholder}
+            </Text>
+          </View>
+          <ScrollView className="px-4 py-2">
+            {options.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() => { onValueChange(opt.value); setOpen(false); }}
+                className="flex-row items-center justify-between py-3 border-b border-slate-50"
+                activeOpacity={0.7}
+              >
+                <Text className={`text-sm ${opt.value === value ? 'text-blue-600 font-semibold' : 'text-slate-800'}`}>
+                  {opt.label}
+                </Text>
+                {opt.value === value && <Check size={16} color="#2563eb" />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
     </View>
   );

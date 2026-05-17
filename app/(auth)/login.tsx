@@ -1,104 +1,108 @@
 import React, { useState } from 'react';
 import {
-  View, Text, KeyboardAvoidingView, Platform,
-  TouchableOpacity, ScrollView, Alert,
+  View, Text, KeyboardAvoidingView, Platform, ScrollView, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Auth } from '@/lib/firestore';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
+import { Auth } from '../../lib/firestore';
+import { useAuth } from '../../lib/auth';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
 
-export default function Login() {
+export default function LoginScreen() {
   const router = useRouter();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const { refreshUser } = useAuth();
+  const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!email || !password) {
-      Alert.alert('Missing fields', 'Please fill in email and password.');
+  async function handleSubmit() {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Error', 'Please enter email and password.');
+      return;
+    }
+    if (isSignUp && !name.trim()) {
+      Alert.alert('Error', 'Please enter your name.');
       return;
     }
     setLoading(true);
     try {
-      if (mode === 'signup') {
-        await Auth.signUpWithEmail(email, password, { name });
+      if (isSignUp) {
+        await Auth.signUpWithEmail(email.trim(), password, { name: name.trim() });
       } else {
-        await Auth.loginWithEmail(email, password);
+        await Auth.loginWithEmail(email.trim(), password);
       }
-      // RootNav useEffect will redirect automatically
-    } catch (err: unknown) {
-      Alert.alert('Error', (err as Error)?.message ?? 'Authentication failed');
+      await refreshUser();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Something went wrong';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       className="flex-1 bg-slate-50"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <View className="flex-1 justify-center px-6 py-12">
-          {/* Logo */}
           <View className="items-center mb-10">
-            <View className="w-20 h-20 rounded-3xl bg-blue-600 items-center justify-center shadow-lg mb-4">
-              <Text className="text-white text-3xl font-bold">YEF</Text>
+            <View className="w-16 h-16 bg-blue-600 rounded-2xl items-center justify-center mb-4">
+              <Text className="text-3xl">✝️</Text>
             </View>
-            <Text className="text-2xl font-bold text-slate-800">YEF Evangelism Tracker</Text>
+            <Text className="text-2xl font-bold text-slate-800">YEF Evangelism</Text>
             <Text className="text-sm text-slate-500 mt-1">
-              {mode === 'signup' ? 'Create your account' : 'Sign in to continue'}
+              {isSignUp ? 'Create your account' : 'Sign in to your account'}
             </Text>
           </View>
 
-          {/* Form */}
-          <View className="space-y-4">
-            {mode === 'signup' && (
+          <View className="gap-4">
+            {isSignUp && (
               <Input
                 label="Full Name"
+                placeholder="Your name"
                 value={name}
                 onChangeText={setName}
-                placeholder="Your name"
                 autoCapitalize="words"
               />
             )}
             <Input
               label="Email"
+              placeholder="you@example.com"
               value={email}
               onChangeText={setEmail}
-              placeholder="you@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
             />
             <Input
               label="Password"
+              placeholder="••••••••"
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••"
               secureTextEntry
             />
+
             <Button onPress={handleSubmit} loading={loading} className="mt-2">
-              {mode === 'signup' ? 'Create Account' : 'Sign In'}
+              {isSignUp ? 'Create Account' : 'Sign In'}
+            </Button>
+
+            <Button
+              variant="ghost"
+              onPress={() => setIsSignUp((v) => !v)}
+              disabled={loading}
+            >
+              {isSignUp
+                ? 'Already have an account? Sign In'
+                : "Don't have an account? Sign Up"}
             </Button>
           </View>
-
-          {/* Toggle */}
-          <TouchableOpacity
-            onPress={() => setMode(mode === 'login' ? 'signup' : 'login')}
-            className="mt-6 items-center"
-          >
-            <Text className="text-sm text-slate-600">
-              {mode === 'signup' ? (
-                <>Already have an account? <Text className="text-blue-600 font-medium">Sign in</Text></>
-              ) : (
-                <>New here? <Text className="text-blue-600 font-medium">Create an account</Text></>
-              )}
-            </Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

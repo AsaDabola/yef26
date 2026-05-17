@@ -1,311 +1,319 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  Modal, KeyboardAvoidingView, Platform, Alert,
+  View, Text, ScrollView, TouchableOpacity, Alert, Modal, KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { Play, Square, UserPlus, Newspaper, MapPin, Users, X, Loader2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/lib/auth';
-import { Entities } from '@/lib/firestore';
-import { useEvangelizing } from '@/hooks/useEvangelizing';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import Select from '@/components/ui/Select';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Play, Square, UserPlus, Newspaper, Clock, MapPin, Users } from 'lucide-react-native';
+import { useAuth } from '../../lib/auth';
+import { Entities } from '../../lib/firestore';
+import { useEvangelizing } from '../../lib/store';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
+import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
 
-function formatTime(seconds: number) {
-  const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
-  const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  return `${h}:${m}:${s}`;
+function useTimer(startTime: string | null) {
+  const [elapsed, setElapsed] = useState('0:00');
+  useEffect(() => {
+    if (!startTime) return;
+    const tick = () => {
+      const secs = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      setElapsed(`${m}:${s.toString().padStart(2, '0')}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
+  return elapsed;
 }
 
 export default function AddScreen() {
-  const { user } = useAuth();
   const router = useRouter();
-  const { isEvangelizing, sessionData, startEvangelizing, stopEvangelizing, addStudentToSession } = useEvangelizing();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { isEvangelizing, sessionData, startEvangelizing, stopEvangelizing } = useEvangelizing();
+  const elapsed = useTimer(isEvangelizing ? sessionData?.startTime ?? null : null);
 
-  const [elapsed, setElapsed] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [modeType, setModeType] = useState<'Individual' | 'Group'>('Individual');
+  const [locationName, setLocationName] = useState('');
+  const [showAddStudent, setShowAddStudent] = useState(false);
 
-  const [sessionForm, setSessionForm] = useState({ modeType: 'Individual', locationName: '' });
-  const [studentForm, setStudentForm] = useState({ name: '', universityName: '', phone: '', email: '' });
-  const [newsForm, setNewsForm] = useState({ title: '', content: '', isGlobal: false });
+  // Add Student form
+  const [studentName, setStudentName] = useState('');
+  const [university, setUniversity] = useState('');
+  const [phone, setPhone] = useState('');
+  const [studentEmail, setStudentEmail] = useState('');
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (isEvangelizing && sessionData?.startTime) {
-      intervalRef.current = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - new Date(sessionData.startTime).getTime()) / 1000));
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      setElapsed(0);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isEvangelizing, sessionData?.startTime]);
-
-  const handleStart = () => {
-    startEvangelizing({ modeType: sessionForm.modeType, locationName: sessionForm.locationName });
-  };
-
-  const handleStop = async () => {
-    setSaving(true);
-    const result = stopEvangelizing();
-    try {
+  const endMutation = useMutation({
+    mutationFn: async () => {
+      const session = stopEvangelizing();
       await Entities.EvangelismSession.create({
-        ...result,
+        ...session,
         userId: user?.id,
-        userName: user?.full_name,
-        chapterId: user?.chapterId,
-        chapterName: user?.chapterName,
-        country: user?.country,
+        userName: user?.full_name ?? user?.name ?? '',
+        chapterId: user?.chapterId ?? '',
+        chapterName: user?.chapterName ?? '',
+        country: user?.country ?? '',
       });
-      router.push('/(tabs)/profile');
-    } catch {
-      Alert.alert('Error', 'Could not save session.');
-    }
-    setSaving(false);
-  };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sessions-all'] });
+      Alert.alert('Session Saved', 'Your evangelism session has been recorded!');
+    },
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'),
+  });
 
-  const handleAddStudent = async () => {
-    if (!studentForm.name) return;
-    setSaving(true);
-    try {
+  const addStudentMutation = useMutation({
+    mutationFn: async () => {
       const s = await Entities.Student.create({
-        ...studentForm,
-        evangelizedByUserId: user?.id,
-        evangelizedByUserName: user?.full_name,
-        evangelizedByChapterId: user?.chapterId,
-        evangelizedByChapterName: user?.chapterName,
-        country: user?.country,
+        name: studentName.trim(),
+        universityName: university.trim(),
+        phone: phone.trim(),
+        email: studentEmail.trim(),
+        country: user?.country ?? '',
         statusPipeline: 'Evangelized',
-      });
-      if (isEvangelizing) addStudentToSession(s.id as string);
-      setStudentForm({ name: '', universityName: '', phone: '', email: '' });
-      setShowStudentModal(false);
-      Alert.alert('Added!', `${studentForm.name} has been added.`);
-    } catch {
-      Alert.alert('Error', 'Could not add student.');
-    }
-    setSaving(false);
-  };
+        evangelizedByUserId: user?.id,
+        evangelizedByUserName: user?.full_name ?? user?.name ?? '',
+        evangelizedByChapterId: user?.chapterId ?? '',
+        evangelizedByChapterName: user?.chapterName ?? '',
+        bibleStudyTopics: [],
+      }) as { id: string };
+      if (isEvangelizing) useEvangelizing.getState().addStudentToSession(s.id);
+      return s;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['students-all'] });
+      setStudentName(''); setUniversity(''); setPhone(''); setStudentEmail('');
+      setShowAddStudent(false);
+      Alert.alert('Student Added!', 'Student saved successfully.');
+    },
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'),
+  });
 
-  const handleCreateNews = async () => {
-    if (!newsForm.title || !newsForm.content) return;
-    setSaving(true);
-    try {
-      await Entities.NewsPost.create({
-        ...newsForm,
-        chapterId: newsForm.isGlobal ? null : user?.chapterId,
-        country: user?.country,
-        authorId: user?.id,
-        authorName: user?.full_name,
-      });
-      setNewsForm({ title: '', content: '', isGlobal: false });
-      Alert.alert('Published!', 'News post created.');
-      router.push('/(tabs)/news');
-    } catch {
-      Alert.alert('Error', 'Could not publish post.');
-    }
-    setSaving(false);
-  };
+  function handleStart() {
+    startEvangelizing({ modeType, locationName });
+    setShowStartModal(false);
+  }
 
-  const canCreateNews = user?.userRole === 'Admin' || user?.userRole === 'Evangelism Leader';
+  function handleEnd() {
+    Alert.alert('End Session', 'Are you sure you want to end this session?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'End', style: 'destructive', onPress: () => endMutation.mutate() },
+    ]);
+  }
+
+  if (isEvangelizing) {
+    return (
+      <ScrollView className="flex-1 bg-slate-50">
+        <View className="bg-red-500 pt-14 pb-6 px-5">
+          <View className="flex-row items-center gap-2 mb-1">
+            <View className="w-2 h-2 bg-white rounded-full" />
+            <Text className="text-white text-sm font-semibold">LIVE SESSION</Text>
+          </View>
+          <View className="flex-row items-center gap-2">
+            <Clock size={22} color="#fff" />
+            <Text className="text-white text-4xl font-bold">{elapsed}</Text>
+          </View>
+          {sessionData?.locationName ? (
+            <View className="flex-row items-center gap-1 mt-2">
+              <MapPin size={13} color="#fecaca" />
+              <Text className="text-red-200 text-xs">{sessionData.locationName}</Text>
+            </View>
+          ) : null}
+          <View className="flex-row items-center gap-1 mt-1">
+            <Users size={13} color="#fecaca" />
+            <Text className="text-red-200 text-xs">
+              {sessionData?.studentIds.length ?? 0} students added
+            </Text>
+          </View>
+        </View>
+
+        <View className="px-4 pt-4 gap-3">
+          <TouchableOpacity
+            onPress={() => setShowAddStudent(true)}
+            className="bg-white rounded-2xl border border-slate-200 p-4 flex-row items-center gap-3"
+          >
+            <View className="w-10 h-10 bg-green-50 rounded-xl items-center justify-center">
+              <UserPlus size={20} color="#16a34a" />
+            </View>
+            <View>
+              <Text className="text-sm font-semibold text-slate-800">Add Student</Text>
+              <Text className="text-xs text-slate-500">Log someone you evangelized</Text>
+            </View>
+          </TouchableOpacity>
+
+          <Button
+            variant="destructive"
+            onPress={handleEnd}
+            loading={endMutation.isPending}
+          >
+            End Session
+          </Button>
+        </View>
+
+        {/* Add Student Modal */}
+        <Modal visible={showAddStudent} animationType="slide" presentationStyle="pageSheet">
+          <KeyboardAvoidingView
+            className="flex-1 bg-white"
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <View className="px-5 pt-6 pb-4 border-b border-slate-100">
+              <Text className="text-lg font-bold text-slate-800">Add Student</Text>
+            </View>
+            <ScrollView className="px-5 py-4" keyboardShouldPersistTaps="handled">
+              <View className="gap-4">
+                <Input label="Full Name *" placeholder="Student's name" value={studentName} onChangeText={setStudentName} />
+                <Input label="University *" placeholder="University name" value={university} onChangeText={setUniversity} />
+                <Input label="Phone" placeholder="Phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                <Input label="Email" placeholder="Email address" value={studentEmail} onChangeText={setStudentEmail} keyboardType="email-address" autoCapitalize="none" />
+                <View className="flex-row gap-3 mt-2">
+                  <Button variant="outline" onPress={() => setShowAddStudent(false)} className="flex-1">Cancel</Button>
+                  <Button
+                    onPress={() => {
+                      if (!studentName.trim() || !university.trim()) {
+                        Alert.alert('Required', 'Name and university are required');
+                        return;
+                      }
+                      addStudentMutation.mutate();
+                    }}
+                    loading={addStudentMutation.isPending}
+                    className="flex-1"
+                  >
+                    Save
+                  </Button>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </Modal>
+      </ScrollView>
+    );
+  }
 
   return (
-    <View className="flex-1 bg-slate-50">
-      {/* Evangelizing Banner */}
-      {isEvangelizing && (
-        <View className="bg-blue-600 px-4 py-2 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <View className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-            <Text className="text-white font-medium text-sm">Evangelizing Mode Active</Text>
+    <ScrollView className="flex-1 bg-slate-50">
+      <View className="bg-white border-b border-slate-200 pt-14 pb-4 px-5">
+        <Text className="text-xl font-bold text-slate-800">Quick Actions</Text>
+      </View>
+
+      <View className="px-4 pt-4 gap-3">
+        <TouchableOpacity
+          onPress={() => setShowStartModal(true)}
+          className="bg-blue-600 rounded-2xl p-5 flex-row items-center gap-4"
+        >
+          <View className="w-12 h-12 bg-blue-500 rounded-2xl items-center justify-center">
+            <Play size={22} color="#fff" />
           </View>
-          <Text className="text-blue-200 text-sm">{sessionData?.modeType}</Text>
-        </View>
-      )}
-
-      <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingTop: isEvangelizing ? 8 : 48 }}>
-        <Text className="text-2xl font-bold text-slate-800 mb-1">
-          {isEvangelizing ? 'Evangelizing Mode' : 'Quick Actions'}
-        </Text>
-        <Text className="text-sm text-slate-500 mb-6">
-          {isEvangelizing ? 'Session in progress' : 'Start a session or add records'}
-        </Text>
-
-        {/* Active Session Card */}
-        {isEvangelizing && (
-          <View className="bg-blue-600 rounded-2xl p-6 mb-5">
-            <Text className="text-blue-200 text-sm text-center mb-2">Time Evangelizing</Text>
-            <Text className="text-5xl font-bold text-white text-center font-mono tracking-wider">
-              {formatTime(elapsed)}
-            </Text>
-            <View className="flex-row justify-center gap-4 mt-4 mb-5">
-              <View className="flex-row items-center gap-1">
-                <Users size={14} color="#bfdbfe" />
-                <Text className="text-blue-200 text-xs">{sessionData?.modeType}</Text>
-              </View>
-              {sessionData?.locationName ? (
-                <View className="flex-row items-center gap-1">
-                  <MapPin size={14} color="#bfdbfe" />
-                  <Text className="text-blue-200 text-xs">{sessionData.locationName}</Text>
-                </View>
-              ) : null}
-              <Text className="text-blue-200 text-xs">
-                {sessionData?.studentIds?.length ?? 0} students
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setShowStudentModal(true)}
-              className="bg-white/20 rounded-xl py-3 items-center mb-3"
-            >
-              <View className="flex-row items-center gap-2">
-                <UserPlus size={16} color="#fff" />
-                <Text className="text-white font-medium">Add Student</Text>
-              </View>
-            </TouchableOpacity>
-            <Button variant="destructive" onPress={handleStop} loading={saving}>
-              <View className="flex-row items-center gap-2">
-                <Square size={16} color="#fff" />
-                <Text className="text-white font-semibold">End Session</Text>
-              </View>
-            </Button>
+          <View>
+            <Text className="text-white font-bold text-base">Start Evangelizing</Text>
+            <Text className="text-blue-200 text-xs mt-0.5">Start a timed session</Text>
           </View>
-        )}
+        </TouchableOpacity>
 
-        {/* Start Session */}
-        {!isEvangelizing && (
-          <Card className="mb-4">
-            <CardHeader>
-              <CardTitle>
-                <View className="flex-row items-center gap-2">
-                  <Play size={18} color="#2563eb" />
-                  <Text className="text-base font-semibold text-slate-800">Start Evangelizing</Text>
-                </View>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <View className="space-y-3">
-                <Select
-                  label="Session Type"
-                  value={sessionForm.modeType}
-                  onValueChange={(v) => setSessionForm({ ...sessionForm, modeType: v })}
-                  options={[{ label: 'Individual', value: 'Individual' }, { label: 'Group', value: 'Group' }]}
-                />
-                <Input
-                  label="Location (optional)"
-                  value={sessionForm.locationName}
-                  onChangeText={(v) => setSessionForm({ ...sessionForm, locationName: v })}
-                  placeholder="e.g., Campus Library"
-                />
-                <Button onPress={handleStart}>
-                  <View className="flex-row items-center gap-2">
-                    <Play size={16} color="#fff" />
-                    <Text className="text-white font-semibold">Start Session</Text>
-                  </View>
+        <TouchableOpacity
+          onPress={() => setShowAddStudent(true)}
+          className="bg-white rounded-2xl border border-slate-200 p-5 flex-row items-center gap-4"
+        >
+          <View className="w-12 h-12 bg-green-50 rounded-2xl items-center justify-center">
+            <UserPlus size={22} color="#16a34a" />
+          </View>
+          <View>
+            <Text className="text-slate-800 font-bold text-base">Add Student</Text>
+            <Text className="text-slate-500 text-xs mt-0.5">Log a contact without a session</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push('/news')}
+          className="bg-white rounded-2xl border border-slate-200 p-5 flex-row items-center gap-4"
+        >
+          <View className="w-12 h-12 bg-purple-50 rounded-2xl items-center justify-center">
+            <Newspaper size={22} color="#7c3aed" />
+          </View>
+          <View>
+            <Text className="text-slate-800 font-bold text-base">Post News</Text>
+            <Text className="text-slate-500 text-xs mt-0.5">Share with your chapter or globally</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Start Session Modal */}
+      <Modal visible={showStartModal} animationType="slide" transparent>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View className="flex-1 justify-end">
+            <View className="bg-white rounded-t-3xl px-5 pt-6 pb-10 gap-4">
+              <Text className="text-lg font-bold text-slate-800">Start Evangelism Session</Text>
+              <Select
+                label="Session Type"
+                value={modeType}
+                onValueChange={(v) => setModeType(v as 'Individual' | 'Group')}
+                options={[
+                  { label: 'Individual', value: 'Individual' },
+                  { label: 'Group', value: 'Group' },
+                ]}
+              />
+              <Input
+                label="Location (optional)"
+                placeholder="e.g. Campus Library"
+                value={locationName}
+                onChangeText={setLocationName}
+              />
+              <View className="flex-row gap-3">
+                <Button variant="outline" onPress={() => setShowStartModal(false)} className="flex-1">
+                  Cancel
                 </Button>
-              </View>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Quick Add Student */}
-        {!isEvangelizing && (
-          <TouchableOpacity onPress={() => setShowStudentModal(true)}>
-            <Card className="mb-4 p-4">
-              <View className="flex-row items-center gap-3">
-                <View className="w-10 h-10 rounded-xl bg-green-100 items-center justify-center">
-                  <UserPlus size={20} color="#16a34a" />
-                </View>
-                <View className="flex-1">
-                  <Text className="font-medium text-slate-800">Add New Student</Text>
-                  <Text className="text-xs text-slate-500">Record a student contact</Text>
-                </View>
-              </View>
-            </Card>
-          </TouchableOpacity>
-        )}
-
-        {/* Create News */}
-        {canCreateNews && !isEvangelizing && (
-          <Card className="mb-4">
-            <CardHeader>
-              <CardTitle>
-                <View className="flex-row items-center gap-2">
-                  <Newspaper size={18} color="#4f46e5" />
-                  <Text className="text-base font-semibold text-slate-800">Create News Post</Text>
-                </View>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <View className="space-y-3">
-                <Input label="Title *" value={newsForm.title}
-                  onChangeText={(v) => setNewsForm({ ...newsForm, title: v })} placeholder="Post title" />
-                <Input label="Content *" value={newsForm.content}
-                  onChangeText={(v) => setNewsForm({ ...newsForm, content: v })}
-                  placeholder="Write your update..." multiline numberOfLines={4}
-                  textAlignVertical="top" className="min-h-24" />
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-sm text-slate-700">Post Globally</Text>
-                  <TouchableOpacity
-                    onPress={() => setNewsForm({ ...newsForm, isGlobal: !newsForm.isGlobal })}
-                    className={`w-12 h-6 rounded-full ${newsForm.isGlobal ? 'bg-blue-600' : 'bg-slate-200'} justify-center`}
-                  >
-                    <View className={`w-5 h-5 rounded-full bg-white shadow mx-0.5 ${newsForm.isGlobal ? 'ml-6' : ''}`} />
-                  </TouchableOpacity>
-                </View>
-                <Button
-                  onPress={handleCreateNews}
-                  disabled={!newsForm.title || !newsForm.content}
-                  loading={saving}
-                >
-                  Publish Post
-                </Button>
-              </View>
-            </CardContent>
-          </Card>
-        )}
-      </ScrollView>
-
-      {/* Add Student Modal */}
-      <Modal visible={showStudentModal} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
-          <View className="flex-1 bg-black/40 justify-end">
-            <View className="bg-white rounded-t-3xl p-6">
-              <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-lg font-semibold text-slate-800">Quick Add Student</Text>
-                <TouchableOpacity onPress={() => setShowStudentModal(false)}>
-                  <X size={20} color="#94a3b8" />
-                </TouchableOpacity>
-              </View>
-              <View className="space-y-3">
-                <Input label="Name *" value={studentForm.name}
-                  onChangeText={(v) => setStudentForm({ ...studentForm, name: v })} placeholder="Student's name" />
-                <Input label="University" value={studentForm.universityName}
-                  onChangeText={(v) => setStudentForm({ ...studentForm, universityName: v })} placeholder="e.g., UCLA" />
-                <View className="flex-row gap-3">
-                  <View className="flex-1">
-                    <Input label="Phone" value={studentForm.phone}
-                      onChangeText={(v) => setStudentForm({ ...studentForm, phone: v })}
-                      placeholder="Phone" keyboardType="phone-pad" />
-                  </View>
-                  <View className="flex-1">
-                    <Input label="Email" value={studentForm.email}
-                      onChangeText={(v) => setStudentForm({ ...studentForm, email: v })}
-                      placeholder="Email" keyboardType="email-address" autoCapitalize="none" />
-                  </View>
-                </View>
-                <Button onPress={handleAddStudent} disabled={!studentForm.name} loading={saving}>
-                  Add Student
+                <Button onPress={handleStart} className="flex-1">
+                  Start
                 </Button>
               </View>
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+
+      {/* Add Student Modal (outside session) */}
+      <Modal visible={showAddStudent && !isEvangelizing} animationType="slide" presentationStyle="pageSheet">
+        <KeyboardAvoidingView
+          className="flex-1 bg-white"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View className="px-5 pt-6 pb-4 border-b border-slate-100">
+            <Text className="text-lg font-bold text-slate-800">Add Student</Text>
+          </View>
+          <ScrollView className="px-5 py-4" keyboardShouldPersistTaps="handled">
+            <View className="gap-4">
+              <Input label="Full Name *" placeholder="Student's name" value={studentName} onChangeText={setStudentName} />
+              <Input label="University *" placeholder="University name" value={university} onChangeText={setUniversity} />
+              <Input label="Phone" placeholder="Phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              <Input label="Email" placeholder="Email address" value={studentEmail} onChangeText={setStudentEmail} keyboardType="email-address" autoCapitalize="none" />
+              <View className="flex-row gap-3 mt-2">
+                <Button variant="outline" onPress={() => setShowAddStudent(false)} className="flex-1">Cancel</Button>
+                <Button
+                  onPress={() => {
+                    if (!studentName.trim() || !university.trim()) {
+                      Alert.alert('Required', 'Name and university are required');
+                      return;
+                    }
+                    addStudentMutation.mutate();
+                  }}
+                  loading={addStudentMutation.isPending}
+                  className="flex-1"
+                >
+                  Save
+                </Button>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+    </ScrollView>
   );
 }

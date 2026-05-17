@@ -1,20 +1,21 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
-import { Auth, type UserProfile } from './firestore';
+import { Auth } from './firestore';
+import type { UserProfile } from './types';
 
-type AuthContextType = {
+type AuthContextValue = {
   user: UserProfile | null;
   loading: boolean;
-  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  logout: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextType>({
+const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
-  logout: async () => {},
   refreshUser: async () => {},
+  logout: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -23,35 +24,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
+      if (firebaseUser) {
+        try {
           const profile = await Auth.me();
           setUser(profile);
-        } else {
+        } catch {
           setUser(null);
         }
-      } finally {
-        setLoading(false);
+      } else {
+        setUser(null);
       }
+      setLoading(false);
     });
     return unsub;
   }, []);
 
-  const logout = async () => {
+  async function refreshUser() {
+    try {
+      const profile = await Auth.me();
+      setUser(profile);
+    } catch {
+      setUser(null);
+    }
+  }
+
+  async function logout() {
     await Auth.logout();
     setUser(null);
-  };
-
-  const refreshUser = async () => {
-    const profile = await Auth.me();
-    setUser(profile);
-  };
+  }
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, refreshUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  return useContext(AuthContext);
+}

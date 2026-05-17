@@ -1,181 +1,170 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  KeyboardAvoidingView, Platform, Alert,
+  View, Text, ScrollView, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { MapPin, Users, ArrowRight, ArrowLeft } from 'lucide-react-native';
-import { Auth, Entities } from '@/lib/firestore';
-import { useAuth } from '@/lib/auth';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import Select from '@/components/ui/Select';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Auth, Entities } from '../../lib/firestore';
+import { useAuth } from '../../lib/auth';
+import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
+import type { Chapter } from '../../lib/types';
 
 const COUNTRIES = [
-  'United States', 'Canada', 'United Kingdom', 'Australia', 'Nigeria',
-  'Ghana', 'South Korea', 'Germany', 'France', 'Brazil', 'Other',
+  'USA', 'Canada', 'UK', 'Nigeria', 'Ghana', 'Kenya', 'South Korea',
+  'Philippines', 'India', 'Australia', 'Germany', 'France', 'Brazil',
+  'Other',
 ].map((c) => ({ label: c, value: c }));
 
-export default function Onboarding() {
-  const router = useRouter();
+export default function OnboardingScreen() {
   const { refreshUser } = useAuth();
   const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [chapters, setChapters] = useState<{ label: string; value: string }[]>([]);
-  const [form, setForm] = useState({
-    country: '', state: '', city: '',
-    chapterId: '', chapterName: '', newChapterName: '',
+  const [country, setCountry] = useState('');
+  const [state, setState] = useState('');
+  const [city, setCity] = useState('');
+  const [selectedChapterId, setSelectedChapterId] = useState('');
+  const [newChapterName, setNewChapterName] = useState('');
+  const [creatingChapter, setCreatingChapter] = useState(false);
+
+  const { data: chapters = [] } = useQuery<Chapter[]>({
+    queryKey: ['chapters'],
+    queryFn: () => Entities.Chapter.list() as Promise<Chapter[]>,
   });
 
-  useEffect(() => {
-    if (!form.country) return;
-    Entities.Chapter.filter({ country: form.country }).then((chaps) => {
-      setChapters([
-        ...chaps.map((c: Record<string, unknown>) => ({ label: c.name as string, value: c.id as string })),
-        { label: '+ Create New Chapter', value: 'new' },
-      ]);
-    });
-  }, [form.country]);
+  const countryChapters = chapters.filter(
+    (c) => !country || c.country === country
+  );
 
-  const handleSubmit = async () => {
-    setLoading(true);
-    try {
-      let chapterId = form.chapterId;
-      let chapterName = form.chapterName;
+  const chapterOptions = [
+    ...countryChapters.map((c) => ({ label: c.name, value: c.id })),
+    { label: '+ Create new chapter', value: '__new__' },
+  ];
 
-      if (form.chapterId === 'new' && form.newChapterName) {
-        const c = await Entities.Chapter.create({
-          name: form.newChapterName,
-          country: form.country,
-          state: form.state,
-          city: form.city,
-        });
-        chapterId = c.id as string;
-        chapterName = form.newChapterName;
+  const mutation = useMutation({
+    mutationFn: async () => {
+      let chapterId = selectedChapterId;
+      let chapterName = '';
+
+      if (selectedChapterId === '__new__') {
+        if (!newChapterName.trim()) throw new Error('Enter a chapter name');
+        const ch = await Entities.Chapter.create({
+          name: newChapterName.trim(),
+          country,
+          state,
+          city,
+        }) as Chapter;
+        chapterId = ch.id;
+        chapterName = ch.name;
+      } else {
+        const ch = chapters.find((c) => c.id === chapterId);
+        chapterName = ch?.name ?? '';
       }
 
       await Auth.updateMe({
-        country: form.country, state: form.state, city: form.city,
-        chapterId, chapterName,
+        country,
+        state,
+        city,
+        chapterId,
+        chapterName,
         onboardingComplete: true,
-        userRole: 'Member',
         membershipStatus: 'Active',
+        userRole: 'Member',
       });
+    },
+    onSuccess: () => refreshUser(),
+    onError: (e) => Alert.alert('Error', e instanceof Error ? e.message : 'Failed'),
+  });
 
-      await refreshUser();
-      router.replace('/(tabs)');
-    } catch (e) {
-      Alert.alert('Error', 'Could not complete setup. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  function goNext() {
+    if (!country) { Alert.alert('Required', 'Please select your country'); return; }
+    setStep(2);
+  }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-navy"
+      className="flex-1 bg-slate-50"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <View className="flex-1 justify-center px-6 py-12">
-          {/* Logo */}
-          <View className="items-center mb-8">
-            <View className="w-16 h-16 rounded-2xl bg-blue-600 items-center justify-center mb-3">
-              <Text className="text-white text-2xl font-bold">YEF</Text>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View className="flex-1 px-6 py-12">
+          <View className="mb-8">
+            <Text className="text-2xl font-bold text-slate-800">Welcome!</Text>
+            <Text className="text-sm text-slate-500 mt-1">
+              Step {step} of 2 — Let's set up your profile
+            </Text>
+            <View className="flex-row gap-2 mt-3">
+              {[1, 2].map((s) => (
+                <View
+                  key={s}
+                  className={`h-1.5 flex-1 rounded-full ${step >= s ? 'bg-blue-600' : 'bg-slate-200'}`}
+                />
+              ))}
             </View>
-            <Text className="text-2xl font-bold text-white">Welcome to YEF Tracker</Text>
-            <Text className="text-sm text-blue-200 mt-1">Let's get you set up in just a moment</Text>
           </View>
 
-          {/* Step 1 — Location */}
-          {step === 1 && (
-            <View className="bg-white rounded-3xl p-6 space-y-4">
-              <View className="flex-row items-center gap-3 mb-2">
-                <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center">
-                  <MapPin size={20} color="#2563eb" />
-                </View>
-                <View>
-                  <Text className="font-semibold text-slate-800">Your Location</Text>
-                  <Text className="text-xs text-slate-500">Where are you based?</Text>
-                </View>
-              </View>
-
+          {step === 1 ? (
+            <View className="gap-4">
+              <Text className="text-base font-semibold text-slate-700">Your Location</Text>
               <Select
-                label="Country *"
-                value={form.country}
-                onValueChange={(v) => setForm({ ...form, country: v, chapterId: '', chapterName: '' })}
+                label="Country"
+                value={country}
+                onValueChange={setCountry}
                 options={COUNTRIES}
                 placeholder="Select country"
               />
-              <Input label="State / Province" value={form.state}
-                onChangeText={(v) => setForm({ ...form, state: v })} placeholder="e.g., California" />
-              <Input label="City" value={form.city}
-                onChangeText={(v) => setForm({ ...form, city: v })} placeholder="e.g., Los Angeles" />
-
-              <Button onPress={() => setStep(2)} disabled={!form.country}>
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-white font-semibold">Continue</Text>
-                  <ArrowRight size={16} color="#fff" />
-                </View>
-              </Button>
+              <Input
+                label="State / Province (optional)"
+                placeholder="e.g. California"
+                value={state}
+                onChangeText={setState}
+              />
+              <Input
+                label="City (optional)"
+                placeholder="e.g. Los Angeles"
+                value={city}
+                onChangeText={setCity}
+              />
+              <Button onPress={goNext} className="mt-4">Continue</Button>
             </View>
-          )}
-
-          {/* Step 2 — Chapter */}
-          {step === 2 && (
-            <View className="bg-white rounded-3xl p-6 space-y-4">
-              <View className="flex-row items-center gap-3 mb-2">
-                <View className="w-10 h-10 rounded-full bg-indigo-100 items-center justify-center">
-                  <Users size={20} color="#4f46e5" />
-                </View>
-                <View>
-                  <Text className="font-semibold text-slate-800">Your Chapter</Text>
-                  <Text className="text-xs text-slate-500">Join or create a local chapter</Text>
-                </View>
-              </View>
-
+          ) : (
+            <View className="gap-4">
+              <Text className="text-base font-semibold text-slate-700">Your Chapter</Text>
               <Select
                 label="Select Chapter"
-                value={form.chapterId}
+                value={selectedChapterId}
                 onValueChange={(v) => {
-                  const found = chapters.find((c) => c.value === v);
-                  setForm({ ...form, chapterId: v, chapterName: found?.label ?? '' });
+                  setSelectedChapterId(v);
+                  setCreatingChapter(v === '__new__');
                 }}
-                options={chapters}
-                placeholder="Choose your chapter"
+                options={chapterOptions}
+                placeholder="Choose a chapter"
               />
-
-              {form.chapterId === 'new' && (
-                <Input label="New Chapter Name" value={form.newChapterName}
-                  onChangeText={(v) => setForm({ ...form, newChapterName: v })}
-                  placeholder="e.g., YEF Los Angeles" />
+              {creatingChapter && (
+                <Input
+                  label="New Chapter Name"
+                  placeholder="e.g. UCLA YEF"
+                  value={newChapterName}
+                  onChangeText={setNewChapterName}
+                />
               )}
-
-              <View className="flex-row gap-3 mt-2">
-                <TouchableOpacity onPress={() => setStep(1)}
-                  className="flex-1 border border-slate-200 rounded-xl py-3 items-center">
-                  <View className="flex-row items-center gap-1">
-                    <ArrowLeft size={16} color="#64748b" />
-                    <Text className="text-sm font-medium text-slate-600">Back</Text>
-                  </View>
-                </TouchableOpacity>
+              <View className="flex-row gap-3 mt-4">
+                <Button variant="outline" onPress={() => setStep(1)} className="flex-1">
+                  Back
+                </Button>
                 <Button
-                  onPress={handleSubmit}
-                  loading={loading}
-                  disabled={!form.chapterId || (form.chapterId === 'new' && !form.newChapterName)}
+                  onPress={() => mutation.mutate()}
+                  loading={mutation.isPending}
+                  disabled={!selectedChapterId}
                   className="flex-1"
                 >
-                  Get Started
+                  Finish
                 </Button>
               </View>
             </View>
           )}
-
-          {/* Dots */}
-          <View className="flex-row justify-center gap-2 mt-6">
-            <View className={`w-2 h-2 rounded-full ${step === 1 ? 'bg-white' : 'bg-white/30'}`} />
-            <View className={`w-2 h-2 rounded-full ${step === 2 ? 'bg-white' : 'bg-white/30'}`} />
-          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

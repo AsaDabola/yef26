@@ -1,147 +1,144 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
 import moment from 'moment';
-import { useAuth } from '@/lib/auth';
-import { Entities } from '@/lib/firestore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { useAuth } from '../lib/auth';
+import { Entities } from '../lib/firestore';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { PIPELINE_STAGES } from '../lib/types';
+import type { EvangelismSession, Student } from '../lib/types';
 
-type TimeRange = 'week' | 'month' | 'quarter' | 'year';
+type Range = 'Week' | 'Month' | 'Quarter' | 'Year';
 
-function BarRow({ label, value, max }: { label: string; value: number; max: number }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <View className="mb-3">
-      <View className="flex-row justify-between mb-1">
-        <Text className="text-xs text-slate-600">{label}</Text>
-        <Text className="text-xs font-semibold text-slate-800">{value}</Text>
-      </View>
-      <View className="h-2 bg-slate-100 rounded-full overflow-hidden">
-        <View className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
-      </View>
-    </View>
-  );
+function sinceDate(r: Range) {
+  const d = new Date();
+  if (r === 'Week') d.setDate(d.getDate() - 7);
+  else if (r === 'Month') d.setMonth(d.getMonth() - 1);
+  else if (r === 'Quarter') d.setMonth(d.getMonth() - 3);
+  else d.setFullYear(d.getFullYear() - 1);
+  return d;
 }
 
 export default function AnalyticsScreen() {
   const { user } = useAuth();
-  const router = useRouter();
-  const [range, setRange] = useState<TimeRange>('month');
+  const [range, setRange] = useState<Range>('Month');
 
-  const { data: sessions = [], isLoading: loadS } = useQuery({
-    queryKey: ['analyticsSessions', user?.id],
-    queryFn: () => Entities.EvangelismSession.filter({ userId: user?.id }, '-created_date', 500),
-    enabled: !!user,
+  const { data: sessions = [] } = useQuery<EvangelismSession[]>({
+    queryKey: ['sessions-all'],
+    queryFn: () => Entities.EvangelismSession.list('-created_date', 500) as Promise<EvangelismSession[]>,
   });
 
-  const { data: students = [], isLoading: loadSt } = useQuery({
-    queryKey: ['analyticsStudents', user?.id],
-    queryFn: () => Entities.Student.filter({ evangelizedByUserId: user?.id }, '-created_date', 500),
-    enabled: !!user,
+  const { data: students = [] } = useQuery<Student[]>({
+    queryKey: ['students-all'],
+    queryFn: () => Entities.Student.list('-created_date', 500) as Promise<Student[]>,
   });
 
-  const subtract: Record<TimeRange, [number, moment.unitOfTime.DurationConstructor]> = {
-    week: [1, 'week'], month: [1, 'month'], quarter: [3, 'months'], year: [1, 'year'],
-  };
-  const cutoff = moment().subtract(...subtract[range]);
-  const filteredSessions = (sessions as Record<string, unknown>[]).filter((s) =>
-    moment(s.created_date as string).isAfter(cutoff)
+  const since = sinceDate(range);
+  const mySessions = sessions.filter(
+    (s) => s.userId === user?.id && new Date(s.created_date) >= since
   );
-  const filteredStudents = (students as Record<string, unknown>[]).filter((s) =>
-    moment(s.created_date as string).isAfter(cutoff)
+  const myStudents = students.filter(
+    (s) => s.evangelizedByUserId === user?.id && new Date(s.created_date) >= since
   );
+  const totalHours = Math.round(
+    mySessions.reduce((sum, s) => sum + (s.durationMinutes ?? 0), 0) / 60 * 10
+  ) / 10;
 
-  const totalHours = Math.round(filteredSessions.reduce((acc, s) => acc + ((s.durationMinutes as number) || 0), 0) / 60);
+  // Monthly session bars (last 6 months)
+  const monthBars = Array.from({ length: 6 }, (_, i) => {
+    const m = moment().subtract(5 - i, 'months');
+    const count = sessions.filter(
+      (s) =>
+        s.userId === user?.id &&
+        moment(s.created_date).isSame(m, 'month')
+    ).length;
+    return { label: m.format('MMM'), count };
+  });
+  const maxBar = Math.max(...monthBars.map((b) => b.count), 1);
 
   // Pipeline breakdown
-  const pipeline: Record<string, number> = {};
-  filteredStudents.forEach((s) => {
-    const stage = (s.statusPipeline as string) ?? 'Unknown';
-    pipeline[stage] = (pipeline[stage] || 0) + 1;
-  });
-  const pipelineMax = Math.max(...Object.values(pipeline), 1);
-
-  // Monthly sessions (last 6 months)
-  const months = Array.from({ length: 6 }, (_, i) => moment().subtract(5 - i, 'months'));
-  const monthlyData = months.map((m) => ({
-    label: m.format('MMM'),
-    count: (sessions as Record<string, unknown>[]).filter((s) =>
-      moment(s.created_date as string).isSame(m, 'month')
-    ).length,
-  }));
-  const monthMax = Math.max(...monthlyData.map((m) => m.count), 1);
-
-  const isLoading = loadS || loadSt;
+  const pipelineCounts = PIPELINE_STAGES.map((stage) => ({
+    stage,
+    count: myStudents.filter((s) => s.statusPipeline === stage).length,
+  })).filter((p) => p.count > 0);
+  const maxPipeline = Math.max(...pipelineCounts.map((p) => p.count), 1);
 
   return (
     <ScrollView className="flex-1 bg-slate-50">
-      <View className="px-4 pt-12 pb-8">
-        {/* Header */}
-        <View className="flex-row items-center gap-3 mb-6">
-          <TouchableOpacity onPress={() => router.back()}>
-            <ArrowLeft size={22} color="#1e293b" />
-          </TouchableOpacity>
-          <Text className="text-2xl font-bold text-slate-800">Analytics</Text>
-        </View>
-
-        {/* Range Filter */}
-        <View className="flex-row bg-slate-100 rounded-xl p-1 mb-5">
-          {(['week', 'month', 'quarter', 'year'] as TimeRange[]).map((r) => (
-            <TouchableOpacity key={r} onPress={() => setRange(r)}
-              className={`flex-1 py-1.5 rounded-lg items-center ${range === r ? 'bg-white shadow-sm' : ''}`}>
-              <Text className={`text-xs font-medium capitalize ${range === r ? 'text-slate-800' : 'text-slate-500'}`}>
+      <View className="px-4 py-4 gap-4">
+        {/* Range selector */}
+        <View className="flex-row gap-2">
+          {(['Week', 'Month', 'Quarter', 'Year'] as Range[]).map((r) => (
+            <TouchableOpacity
+              key={r}
+              onPress={() => setRange(r)}
+              className={`flex-1 py-2 rounded-xl ${range === r ? 'bg-blue-600' : 'bg-white border border-slate-200'}`}
+            >
+              <Text className={`text-xs font-semibold text-center ${range === r ? 'text-white' : 'text-slate-600'}`}>
                 {r}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {isLoading ? (
-          <View className="items-center py-16">
-            <ActivityIndicator color="#2563eb" />
-          </View>
-        ) : (
-          <View className="gap-4">
-            {/* Summary */}
-            <View className="flex-row gap-3">
-              {[
-                { label: 'Hours', value: totalHours, bg: 'bg-blue-50' },
-                { label: 'Sessions', value: filteredSessions.length, bg: 'bg-indigo-50' },
-                { label: 'Students', value: filteredStudents.length, bg: 'bg-green-50' },
-              ].map((s) => (
-                <View key={s.label} className={`flex-1 ${s.bg} rounded-2xl p-4 items-center`}>
-                  <Text className="text-2xl font-bold text-slate-800">{s.value}</Text>
-                  <Text className="text-xs text-slate-500 mt-0.5">{s.label}</Text>
+        {/* Stats */}
+        <View className="flex-row gap-3">
+          {[
+            { label: 'Hours', value: totalHours },
+            { label: 'Sessions', value: mySessions.length },
+            { label: 'Students', value: myStudents.length },
+          ].map(({ label, value }) => (
+            <Card key={label} className="flex-1">
+              <CardContent className="pt-3 items-center">
+                <Text className="text-2xl font-bold text-slate-800">{value}</Text>
+                <Text className="text-xs text-slate-500 mt-0.5">{label}</Text>
+              </CardContent>
+            </Card>
+          ))}
+        </View>
+
+        {/* Sessions chart */}
+        <Card>
+          <CardHeader><CardTitle>Sessions — Last 6 Months</CardTitle></CardHeader>
+          <CardContent>
+            <View className="flex-row items-end gap-2 h-32">
+              {monthBars.map(({ label, count }) => (
+                <View key={label} className="flex-1 items-center gap-1">
+                  <Text className="text-xs text-slate-500">{count}</Text>
+                  <View
+                    className="w-full bg-blue-600 rounded-t-md min-h-[4px]"
+                    style={{ height: (count / maxBar) * 80 + 4 }}
+                  />
+                  <Text className="text-xs text-slate-400">{label}</Text>
                 </View>
               ))}
             </View>
+          </CardContent>
+        </Card>
 
-            {/* Monthly Sessions */}
-            <Card>
-              <CardHeader><CardTitle>Sessions by Month</CardTitle></CardHeader>
-              <CardContent>
-                {monthlyData.map((m) => (
-                  <BarRow key={m.label} label={m.label} value={m.count} max={monthMax} />
+        {/* Pipeline chart */}
+        {pipelineCounts.length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>Student Pipeline</CardTitle></CardHeader>
+            <CardContent>
+              <View className="gap-3">
+                {pipelineCounts.map(({ stage, count }) => (
+                  <View key={stage} className="gap-1">
+                    <View className="flex-row justify-between">
+                      <Text className="text-xs text-slate-600">{stage}</Text>
+                      <Text className="text-xs font-semibold text-slate-700">{count}</Text>
+                    </View>
+                    <View className="h-2 bg-slate-100 rounded-full">
+                      <View
+                        className="h-2 bg-blue-600 rounded-full"
+                        style={{ width: `${(count / maxPipeline) * 100}%` }}
+                      />
+                    </View>
+                  </View>
                 ))}
-              </CardContent>
-            </Card>
-
-            {/* Pipeline */}
-            <Card>
-              <CardHeader><CardTitle>Student Pipeline</CardTitle></CardHeader>
-              <CardContent>
-                {Object.entries(pipeline).length === 0 ? (
-                  <Text className="text-sm text-slate-400">No data for this period</Text>
-                ) : (
-                  Object.entries(pipeline).map(([stage, count]) => (
-                    <BarRow key={stage} label={stage} value={count} max={pipelineMax} />
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </View>
+              </View>
+            </CardContent>
+          </Card>
         )}
       </View>
     </ScrollView>

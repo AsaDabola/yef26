@@ -7,28 +7,9 @@ import {
   signOut, updateProfile, onAuthStateChanged,
 } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage } from './firebase';
-
-export type UserProfile = {
-  id: string;
-  email: string;
-  name: string;
-  full_name: string;
-  profilePhoto?: string;
-  bio?: string;
-  role?: string;
-  userRole?: string;
-  chapterId?: string;
-  chapterName?: string;
-  country?: string;
-  state?: string;
-  city?: string;
-  onboardingComplete?: boolean;
-  membershipStatus?: string;
-  created_date?: string;
-};
-
 import type { User } from 'firebase/auth';
+import { auth, db, storage } from './firebase';
+import type { UserProfile, GoalType } from './types';
 
 async function waitForAuth(): Promise<User | null> {
   if (auth.currentUser) return auth.currentUser;
@@ -43,7 +24,7 @@ async function getUserDoc(uid: string): Promise<UserProfile | null> {
   return { id: uid, ...snap.data() } as UserProfile;
 }
 
-async function ensureUserDoc(u: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) {
+async function ensureUserDoc(u: User) {
   const ref2 = doc(db, 'users', u.uid);
   const snap = await getDoc(ref2);
   if (snap.exists()) return;
@@ -188,7 +169,9 @@ export const Entities = {
 
   User: {
     async list() {
-      const snaps = await getDocs(query(collection(db, 'users'), orderBy('created_date', 'desc')));
+      const snaps = await getDocs(
+        query(collection(db, 'users'), orderBy('created_date', 'desc'))
+      );
       return snaps.docs.map((d) => ({ id: d.id, ...d.data() })) as UserProfile[];
     },
     async update(id: string, data: Partial<UserProfile>) {
@@ -199,19 +182,89 @@ export const Entities = {
   },
 };
 
-export async function getStudentById(id: string): Promise<Record<string, unknown> | null> {
+export async function getStudentById(id: string) {
   const snap = await getDoc(doc(db, 'students', id));
   if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() };
+  return { id: snap.id, ...snap.data() } as Record<string, unknown>;
 }
 
 export async function uploadFile(file: { uri: string; name?: string; type?: string }) {
   const u = await waitForAuth();
   if (!u) throw new Error('Not authenticated');
-  const safeName = `${Date.now()}_${file.name || 'upload'}`;
+  const safeName = `${Date.now()}_${file.name ?? 'upload'}`;
   const storageRef = ref(storage, `uploads/${u.uid}/${safeName}`);
   const response = await fetch(file.uri);
   const blob = await response.blob();
   await uploadBytes(storageRef, blob);
   return getDownloadURL(storageRef);
+}
+
+export async function getGoalProgress(userId: string, type: GoalType): Promise<number> {
+  const now = new Date();
+  let since: Date;
+
+  if (type === 'sessions_week' || type === 'hours_week') {
+    since = new Date(now);
+    since.setDate(now.getDate() - 7);
+  } else {
+    since = new Date(now);
+    since.setDate(1);
+  }
+
+  if (type === 'sessions_week') {
+    const snaps = await getDocs(
+      query(
+        collection(db, 'sessions'),
+        where('userId', '==', userId),
+        where('created_date', '>=', since.toISOString()),
+        limit(200)
+      )
+    );
+    return snaps.size;
+  }
+
+  if (type === 'hours_week') {
+    const snaps = await getDocs(
+      query(
+        collection(db, 'sessions'),
+        where('userId', '==', userId),
+        where('created_date', '>=', since.toISOString()),
+        limit(200)
+      )
+    );
+    const totalMins = snaps.docs.reduce(
+      (sum, d) => sum + ((d.data().durationMinutes as number) ?? 0),
+      0
+    );
+    return Math.round((totalMins / 60) * 10) / 10;
+  }
+
+  if (type === 'students_month') {
+    const snaps = await getDocs(
+      query(
+        collection(db, 'students'),
+        where('evangelizedByUserId', '==', userId),
+        where('created_date', '>=', since.toISOString()),
+        limit(200)
+      )
+    );
+    return snaps.size;
+  }
+
+  if (type === 'bible_studies_month') {
+    const snaps = await getDocs(
+      query(
+        collection(db, 'students'),
+        where('evangelizedByUserId', '==', userId),
+        where('created_date', '>=', since.toISOString()),
+        limit(200)
+      )
+    );
+    return snaps.docs.filter((d) => {
+      const topics = (d.data().bibleStudyTopics ?? []) as { completed: boolean }[];
+      return topics.some((t) => t.completed);
+    }).length;
+  }
+
+  return 0;
 }
