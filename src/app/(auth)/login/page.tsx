@@ -4,14 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -35,155 +33,72 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Left brand panel */}
-      <div className="relative hidden lg:flex lg:w-5/12 xl:w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-12">
-        {/* Background decoration */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-white/5" />
-          <div className="absolute top-1/3 -left-16 h-64 w-64 rounded-full bg-white/5" />
-          <div className="absolute -bottom-16 right-16 h-80 w-80 rounded-full bg-white/5" />
-          <div className="absolute bottom-32 left-1/4 h-40 w-40 rounded-full bg-indigo-500/30" />
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      {/* Top bar */}
+      <div className="bg-blue-700 px-6 py-4 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20">
+          <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
         </div>
-
-        <div className="relative">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm">
-              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
-            <span className="text-lg font-bold text-white">YEF Evangelism</span>
-          </div>
-        </div>
-
-        <div className="relative">
-          <h2 className="text-4xl font-bold leading-tight text-white">
-            Reach more.<br />Track better.<br />Grow together.
-          </h2>
-          <p className="mt-4 text-lg text-indigo-200">
-            Your ministry&apos;s evangelism tracker — built to help your chapter reach every student.
-          </p>
-
-          <div className="mt-12 grid grid-cols-3 gap-4">
-            {[
-              { value: '100+', label: 'Chapters' },
-              { value: '5K+', label: 'Students tracked' },
-              { value: '12K+', label: 'Sessions logged' },
-            ].map(({ value, label }) => (
-              <div key={label} className="rounded-2xl bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-2xl font-bold text-white">{value}</p>
-                <p className="mt-0.5 text-xs text-indigo-200">{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="relative flex items-center gap-3">
-          <div className="flex -space-x-2">
-            {['A', 'B', 'C', 'D'].map((l) => (
-              <div key={l} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-indigo-600 bg-indigo-400 text-xs font-bold text-white">
-                {l}
-              </div>
-            ))}
-          </div>
-          <p className="text-sm text-indigo-200">Join thousands of YEF members worldwide</p>
-        </div>
+        <span className="text-sm font-bold text-white">Youth Evangelical Fellowship</span>
       </div>
 
-      {/* Right form panel */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 lg:px-16">
-        {/* Mobile brand */}
-        <div className="mb-8 flex flex-col items-center lg:hidden">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg">
-            <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-bold text-slate-900">YEF Evangelism</h1>
-        </div>
-
+      {/* Form */}
+      <div className="flex flex-1 items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-slate-900">Welcome back</h2>
-            <p className="mt-1.5 text-sm text-slate-500">Sign in to your account to continue</p>
-          </div>
+          <h1 className="mb-1 text-2xl font-bold text-gray-900">Sign in</h1>
+          <p className="mb-6 text-sm text-gray-500">Enter your credentials to access your account.</p>
 
           {error && (
-            <div className="mb-5 flex items-start gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-100">
-              <svg className="mt-0.5 h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
-              </svg>
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">
+              <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700">
                 Email address
               </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-400/20"
-                />
-              </div>
+              <input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
             </div>
 
             <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-700">
+              <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700">
                 Password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-10 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-400/20"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
+              <input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="group relative mt-2 flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-60"
+              className="w-full rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-60"
             >
-              {loading ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Signing in…
-                </>
-              ) : (
-                <>
-                  Sign in
-                  <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                </>
-              )}
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-slate-500">
+          <p className="mt-5 text-center text-sm text-gray-500">
             Don&apos;t have an account?{' '}
-            <Link href="/signup" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            <Link href="/signup" className="font-semibold text-blue-700 hover:underline">
               Create one
             </Link>
           </p>
