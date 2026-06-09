@@ -15,7 +15,6 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight,
 } from 'lucide-react';
 
 const NAV_LINKS = [
@@ -49,7 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-indigo-600 border-t-transparent" />
           <p className="text-sm text-slate-500">Loading…</p>
         </div>
       </div>
@@ -71,17 +70,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const SidebarContent = () => (
     <div className="flex h-full flex-col">
       {/* Brand */}
-      <div className="flex items-center gap-3 px-5 py-6 border-b border-blue-700/40">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
+      <div className="flex items-center gap-3 px-5 py-5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600">
           <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
           </svg>
         </div>
         <div>
           <p className="text-sm font-bold text-white leading-tight">YEF Evangelism</p>
-          <p className="text-xs text-blue-200">Tracker</p>
+          <p className="text-xs text-slate-400">Tracker</p>
         </div>
       </div>
+
+      <div className="mx-4 border-t border-slate-700/60" />
 
       {/* Nav links */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
@@ -94,32 +95,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setSidebarOpen(false)}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
                 active
-                  ? 'bg-white/20 text-white shadow-sm'
-                  : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-900/50'
+                  : 'text-slate-400 hover:bg-slate-700/60 hover:text-slate-100'
               }`}
             >
-              <Icon className="h-4.5 w-4.5 shrink-0" size={18} />
+              <Icon size={18} className="shrink-0" />
               {label}
-              {active && <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" size={14} />}
             </Link>
           );
         })}
       </nav>
 
       {/* User section */}
-      <div className="border-t border-blue-700/40 p-3">
-        <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white">
+      <div className="border-t border-slate-700/60 p-3">
+        <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-white">{user.name || 'User'}</p>
-            <p className="truncate text-xs text-blue-200">{user.email}</p>
+            <p className="truncate text-xs font-semibold text-slate-200">{user.name || 'User'}</p>
+            <p className="truncate text-xs text-slate-500">{user.email}</p>
           </div>
           <button
             onClick={handleLogout}
             title="Logout"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-blue-200 transition hover:bg-white/20 hover:text-white"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-700 hover:text-slate-200"
           >
             <LogOut size={15} />
           </button>
@@ -129,9 +129,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-slate-100 overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:w-60 lg:flex-col lg:shrink-0 bg-blue-700">
+      <aside className="hidden lg:flex lg:w-56 lg:flex-col lg:shrink-0 bg-slate-900">
         <SidebarContent />
       </aside>
 
@@ -139,13 +139,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="absolute left-0 top-0 h-full w-64 bg-blue-700 shadow-2xl">
+          <aside className="absolute left-0 top-0 h-full w-56 bg-slate-900 shadow-2xl">
             <button
               onClick={() => setSidebarOpen(false)}
-              className="absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-blue-200 hover:bg-white/10 hover:text-white"
+              className="absolute right-3 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white"
             >
               <X size={18} />
             </button>
@@ -157,14 +157,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Mobile top bar */}
-        <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+        <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
           >
             <Menu size={20} />
           </button>
-          <span className="font-semibold text-slate-900">YEF Evangelism</span>
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600">
+              <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </div>
+            <span className="font-semibold text-slate-900">YEF Evangelism</span>
+          </div>
         </header>
 
         {/* Page content */}
