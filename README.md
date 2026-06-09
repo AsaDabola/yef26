@@ -1,47 +1,36 @@
-# YEF Evangelism Tracker
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-A mobile-first web app for tracking evangelism sessions, student contacts, goals, and chapter activity for Youth Evangelism Fellowship (YEF).
+## Getting Started
 
-## Features
+First, run the development server:
 
-- **Session Tracking** — Start/stop live evangelism sessions with a built-in timer
-- **Student Pipeline** — Track students from first contact through discipleship
-- **Analytics** — Charts for hours, sessions, and students over time
-- **Goals** — Set and monitor personal and chapter evangelism goals
-- **Leaderboards** — Local, country, and global rankings
-- **News Feed** — Chapter announcements and event posts
-- **Bible Study Tracking** — Record topics and progress per student
-- **Role-based access** — Admin, Evangelism Leader, and Member roles
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-## Tech Stack
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-- React 18 + Vite
-- Firebase (Auth, Firestore, Storage)
-- Tailwind CSS + shadcn/ui
-- React Router, TanStack Query, Framer Motion
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Setup
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-1. Clone the repo and install dependencies:
-   ```bash
-   npm install
-   ```
+## Learn More
 
-2. Copy `.env.local.example` to `.env.local` and fill in your Firebase project credentials:
-   ```bash
-   cp .env.local.example .env.local
-   ```
+To learn more about Next.js, take a look at the following resources:
 
-3. Run the dev server:
-   ```bash
-   npm run dev
-   ```
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-## Firebase Configuration
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-In your Firebase project enable:
-- **Authentication** → Email/Password sign-in
-- **Firestore Database**
-- **Storage**
+## Deploy on Vercel
 
-The app will auto-create user documents and required Firestore collections on first use.
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
